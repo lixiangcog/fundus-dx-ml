@@ -28,3 +28,7 @@ frontend/.eslintcache
 
 # Investigation scripts
 investigation/
+
+# Claude Code
+CLAUDE.md
+.claude
