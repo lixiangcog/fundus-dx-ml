@@ -37,6 +37,12 @@ python train.py \
 - Uses ResNet18 with ImageNet weights; saves the best weights to `best_model.pth`.
 - Training uses horizontal flip + small rotation; validation is resized + normalized only.
 
+### Evaluate
+```bash
+python evaluate_model.py
+```
+Runs the saved model against the validation set and prints a classification report with precision, recall, and F1-score per class. Loads `best_model.pth` and reads images from `data/processed/val/`.
+
 ### Run Locally
 
 **Backend API**:
