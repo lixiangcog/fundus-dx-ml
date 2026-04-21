@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Code, Brain, Database, Layers, Activity, GitBranch, Cpu, Microscope, Zap } from 'lucide-react';
+import { BookOpen, Code, Brain, Database, Layers, GitBranch, Cpu, Microscope, Zap } from 'lucide-react';
 
 const HowItWorks = () => {
     const [activeTab, setActiveTab] = useState('simple');

@@ -3,7 +3,6 @@ from torchvision import datasets
 from torch.utils.data import DataLoader
 import os
 from sklearn.metrics import classification_report
-import numpy as np
 
 from shared import get_device, get_inference_transform, build_resnet18
 
