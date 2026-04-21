@@ -17,6 +17,9 @@ COPY ./best_model.pth /code/best_model.pth
 # Copy the api directory
 COPY ./api /code/api
 
+# Copy shared utilities used by api/main.py
+COPY ./shared.py /code/shared.py
+
 # Create a user to run the application (Hugging Face Spaces requirement for security)
 RUN useradd -m -u 1000 user
 USER user

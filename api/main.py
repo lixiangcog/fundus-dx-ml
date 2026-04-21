@@ -2,11 +2,15 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 import torch
-import torch.nn as nn
-from torchvision import models, transforms
 from PIL import Image
 import io
+import sys
+import os
 import uvicorn
+
+# Add parent dir to path so 'shared' resolves when running from api/ or project root
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from shared import get_device, get_inference_transform, build_resnet18
 
 app = FastAPI(title="Fundus Classification API")
 
@@ -21,23 +25,21 @@ app.add_middleware(
 
 # Model Setup
 class_names = ['cataract', 'diabetic_retinopathy', 'glaucoma', 'normal']
-device = torch.device("cuda:0" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+device = get_device()
 
 def load_model():
-    model = models.resnet18(weights=None) # Weights loaded from file
-    num_ftrs = model.fc.in_features
-    model.fc = nn.Linear(num_ftrs, len(class_names))
-    
+    model = build_resnet18(len(class_names))
+
     # Load trained weights
     # Assuming best_model.pth is in the parent directory relative to this script execution context
     # or we can specify absolute path. Let's assume it's in the project root.
-    model_path = "best_model.pth" 
+    model_path = "best_model.pth"
     try:
         state_dict = torch.load(model_path, map_location=device)
         model.load_state_dict(state_dict)
     except FileNotFoundError:
         print(f"Warning: {model_path} not found. Model will use random weights.")
-    
+
     model = model.to(device)
     model.eval()
     return model
@@ -45,11 +47,7 @@ def load_model():
 model = load_model()
 
 # Preprocessing
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-])
+transform = get_inference_transform()
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
