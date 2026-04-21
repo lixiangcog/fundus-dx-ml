@@ -2,7 +2,7 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 import torch
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 import io
 import sys
 import os
@@ -29,11 +29,8 @@ def load_model():
     model = build_resnet18(len(class_names))
 
     model_path = "best_model.pth"
-    try:
-        state_dict = torch.load(model_path, map_location=device)
-        model.load_state_dict(state_dict)
-    except FileNotFoundError:
-        print(f"Warning: {model_path} not found. Model will use random weights.")
+    state_dict = torch.load(model_path, map_location=device)
+    model.load_state_dict(state_dict)
 
     model = model.to(device)
     model.eval()
@@ -173,31 +170,30 @@ async def predict(file: UploadFile = File(...)):
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
     
+    contents = await file.read()
     try:
-        contents = await file.read()
         image = Image.open(io.BytesIO(contents)).convert("RGB")
-        
-        input_tensor = transform(image).unsqueeze(0).to(device)
-        
-        with torch.no_grad():
-            outputs = model(input_tensor)
-            probabilities = torch.nn.functional.softmax(outputs, dim=1)
-            
-            top_prob, top_catid = torch.topk(probabilities, 1)
+    except UnidentifiedImageError:
+        raise HTTPException(status_code=400, detail="Uploaded file is not a valid image")
 
-            confidence = top_prob.item()
-            predicted_class = class_names[top_catid.item()]
+    input_tensor = transform(image).unsqueeze(0).to(device)
 
-            all_probs = {class_names[i]: probabilities[0][i].item() for i in range(len(class_names))}
-            
-        return {
-            "prediction": predicted_class,
-            "confidence": confidence,
-            "probabilities": all_probs
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    with torch.no_grad():
+        outputs = model(input_tensor)
+        probabilities = torch.nn.functional.softmax(outputs, dim=1)
+
+        top_prob, top_catid = torch.topk(probabilities, 1)
+
+        confidence = top_prob.item()
+        predicted_class = class_names[top_catid.item()]
+
+        all_probs = {class_names[i]: probabilities[0][i].item() for i in range(len(class_names))}
+
+    return {
+        "prediction": predicted_class,
+        "confidence": confidence,
+        "probabilities": all_probs
+    }
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
