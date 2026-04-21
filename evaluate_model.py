@@ -1,21 +1,18 @@
 import torch
-import torch.nn as nn
-from torchvision import datasets, transforms, models
+from torchvision import datasets
 from torch.utils.data import DataLoader
 import os
 from sklearn.metrics import classification_report
 import numpy as np
 
+from shared import get_device, get_inference_transform, build_resnet18
+
 def evaluate_model(data_dir, model_path):
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+    device = get_device()
     print(f"Using device: {device}")
 
     # Data transforms (same as validation transforms in train.py)
-    data_transforms = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
+    data_transforms = get_inference_transform()
 
     # Load validation dataset
     val_dir = os.path.join(data_dir, 'val')
@@ -29,10 +26,8 @@ def evaluate_model(data_dir, model_path):
     print(f"Classes: {class_names}")
 
     # Load model
-    model = models.resnet18(weights=None)
-    num_ftrs = model.fc.in_features
-    model.fc = nn.Linear(num_ftrs, len(class_names))
-    
+    model = build_resnet18(len(class_names))
+
     try:
         state_dict = torch.load(model_path, map_location=device)
         model.load_state_dict(state_dict)
