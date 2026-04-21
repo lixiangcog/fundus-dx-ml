@@ -9,6 +9,8 @@ import torch.optim as optim
 from torchvision import datasets, transforms, models
 from torch.utils.data import DataLoader
 
+from shared import get_device
+
 def train_model(data_dir, num_epochs=25, batch_size=32, target_acc=None):
     # Data augmentation and normalization for training
     # Just normalization for validation
@@ -37,7 +39,7 @@ def train_model(data_dir, num_epochs=25, batch_size=32, target_acc=None):
     dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
     class_names = image_datasets['train'].classes
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+    device = get_device()
     print(f"Using device: {device}")
     print(f"Classes: {class_names}")
 
