@@ -14,25 +14,20 @@ from shared import get_device, get_inference_transform, build_resnet18
 
 app = FastAPI(title="Fundus Classification API")
 
-# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Model Setup
 class_names = ['cataract', 'diabetic_retinopathy', 'glaucoma', 'normal']
 device = get_device()
 
 def load_model():
     model = build_resnet18(len(class_names))
 
-    # Load trained weights
-    # Assuming best_model.pth is in the parent directory relative to this script execution context
-    # or we can specify absolute path. Let's assume it's in the project root.
     model_path = "best_model.pth"
     try:
         state_dict = torch.load(model_path, map_location=device)
@@ -46,7 +41,6 @@ def load_model():
 
 model = load_model()
 
-# Preprocessing
 transform = get_inference_transform()
 
 @app.get("/", response_class=HTMLResponse)
@@ -190,11 +184,10 @@ async def predict(file: UploadFile = File(...)):
             probabilities = torch.nn.functional.softmax(outputs, dim=1)
             
             top_prob, top_catid = torch.topk(probabilities, 1)
-            
+
             confidence = top_prob.item()
             predicted_class = class_names[top_catid.item()]
-            
-            # Get all probabilities for visualization
+
             all_probs = {class_names[i]: probabilities[0][i].item() for i in range(len(class_names))}
             
         return {

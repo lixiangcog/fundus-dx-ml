@@ -13,7 +13,6 @@ def evaluate_model(data_dir, model_path):
     # Data transforms (same as validation transforms in train.py)
     data_transforms = get_inference_transform()
 
-    # Load validation dataset
     val_dir = os.path.join(data_dir, 'val')
     if not os.path.exists(val_dir):
         print(f"Error: Validation directory not found at {val_dir}")
@@ -24,7 +23,6 @@ def evaluate_model(data_dir, model_path):
     class_names = image_dataset.classes
     print(f"Classes: {class_names}")
 
-    # Load model
     model = build_resnet18(len(class_names))
 
     try:

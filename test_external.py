@@ -24,7 +24,6 @@ from pathlib import Path
 
 from shared import get_device, get_inference_transform, build_resnet18
 
-# Config
 TEST_DIR = "test_external_images"
 CLASS_NAMES = ['cataract', 'diabetic_retinopathy', 'glaucoma', 'normal']
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'}

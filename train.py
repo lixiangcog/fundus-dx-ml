@@ -12,8 +12,6 @@ from torch.utils.data import DataLoader
 from shared import get_device
 
 def train_model(data_dir, num_epochs=25, batch_size=32, target_acc=None):
-    # Data augmentation and normalization for training
-    # Just normalization for validation
     data_transforms = {
         'train': transforms.Compose([
             transforms.Resize((224, 224)),
@@ -43,7 +41,6 @@ def train_model(data_dir, num_epochs=25, batch_size=32, target_acc=None):
     print(f"Using device: {device}")
     print(f"Classes: {class_names}")
 
-    # Use a pre-trained ResNet18 model
     model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
     num_ftrs = model.fc.in_features
     model.fc = nn.Linear(num_ftrs, len(class_names))
@@ -64,40 +61,33 @@ def train_model(data_dir, num_epochs=25, batch_size=32, target_acc=None):
         print(f'Epoch {epoch}/{num_epochs - 1}')
         print('-' * 10)
 
-        # Each epoch has a training and validation phase
         for phase in ['train', 'val']:
             if phase == 'train':
-                model.train()  # Set model to training mode
+                model.train()
             else:
-                model.eval()   # Set model to evaluate mode
+                model.eval()
 
             running_loss = 0.0
             running_corrects = 0
 
-            # Iterate over data.
             for inputs, labels in dataloaders[phase]:
                 inputs = inputs.to(device)
                 labels = labels.to(device)
 
-                # zero the parameter gradients
                 optimizer.zero_grad()
 
-                # forward
-                # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
                     outputs = model(inputs)
                     _, preds = torch.max(outputs, 1)
                     loss = criterion(outputs, labels)
 
-                    # backward + optimize only if in training phase
                     if phase == 'train':
                         loss.backward()
                         optimizer.step()
 
-                # statistics
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
-            
+
             if phase == 'train':
                 scheduler.step()
 
@@ -106,7 +96,6 @@ def train_model(data_dir, num_epochs=25, batch_size=32, target_acc=None):
 
             print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
 
-            # deep copy the model
             if phase == 'val' and epoch_acc > best_acc:
                 best_acc = epoch_acc
                 best_model_wts = copy.deepcopy(model.state_dict())
@@ -125,7 +114,6 @@ def train_model(data_dir, num_epochs=25, batch_size=32, target_acc=None):
     if stop_epoch is not None:
         print(f'Early stop triggered at epoch {stop_epoch}.')
 
-    # load best model weights
     model.load_state_dict(best_model_wts)
     return model
 
