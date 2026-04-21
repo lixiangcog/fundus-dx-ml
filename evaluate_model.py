@@ -25,13 +25,9 @@ def evaluate_model(data_dir, model_path):
 
     model = build_resnet18(len(class_names))
 
-    try:
-        state_dict = torch.load(model_path, map_location=device)
-        model.load_state_dict(state_dict)
-        print(f"Loaded model from {model_path}")
-    except FileNotFoundError:
-        print(f"Error: Model file not found at {model_path}")
-        return
+    state_dict = torch.load(model_path, map_location=device)
+    model.load_state_dict(state_dict)
+    print(f"Loaded model from {model_path}")
 
     model = model.to(device)
     model.eval()
