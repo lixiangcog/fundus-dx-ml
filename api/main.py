@@ -10,7 +10,7 @@ import uvicorn
 
 # Add parent dir to path so 'shared' resolves when running from api/ or project root
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from shared import get_device, get_inference_transform, build_resnet18
+from shared import CLASS_NAMES, get_device, get_inference_transform, build_resnet18
 
 app = FastAPI(title="Fundus Classification API")
 
@@ -22,7 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class_names = ['cataract', 'diabetic_retinopathy', 'glaucoma', 'normal']
+class_names = CLASS_NAMES
 device = get_device()
 
 def load_model():
@@ -154,9 +154,9 @@ async def root():
         <div class="classes">
             <div class="classes-title">Supported Classifications</div>
             <div class="tags">
+                <span class="tag">AMD</span>
                 <span class="tag">Cataract</span>
                 <span class="tag">Diabetic Retinopathy</span>
-                <span class="tag">Glaucoma</span>
                 <span class="tag">Normal</span>
             </div>
         </div>

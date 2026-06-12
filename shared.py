@@ -8,6 +8,10 @@ import torch
 import torch.nn as nn
 from torchvision import models, transforms
 
+# Class labels in torchvision ImageFolder order (alphabetical by directory
+# name), which is the index order the trained model's outputs map to.
+CLASS_NAMES = ['amd', 'cataract', 'diabetic_retinopathy', 'normal']
+
 
 def get_device():
     """Return the best available torch device: CUDA > MPS > CPU."""

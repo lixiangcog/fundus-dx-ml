@@ -8,9 +8,9 @@ Usage:
     python test_external.py --clahe --tta      # Both enhancements
 
 Add your images to the folders in test_external_images/:
+    - amd/
     - cataract/
     - diabetic_retinopathy/
-    - glaucoma/
     - normal/
 """
 
@@ -22,10 +22,9 @@ import numpy as np
 import cv2
 from pathlib import Path
 
-from shared import get_device, get_inference_transform, build_resnet18
+from shared import CLASS_NAMES, get_device, get_inference_transform, build_resnet18
 
 TEST_DIR = "test_external_images"
-CLASS_NAMES = ['cataract', 'diabetic_retinopathy', 'glaucoma', 'normal']
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'}
 
 
