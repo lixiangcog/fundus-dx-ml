@@ -212,7 +212,7 @@ function App() {
               >
                 Professional-grade retinal image analysis powered by deep learning.
                 <span className="block mt-2 text-slate-400">
-                  Detect cataracts, glaucoma, and diabetic retinopathy with clinical precision.
+                  Detect AMD, cataracts, and diabetic retinopathy with clinical precision.
                 </span>
               </motion.p>
             </div>

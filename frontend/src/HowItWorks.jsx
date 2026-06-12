@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Code, Brain, Database, Layers, Activity, GitBranch, Cpu, Microscope, Zap } from 'lucide-react';
+import { BookOpen, Code, Brain, Database, Layers, GitBranch, Cpu, Microscope, Zap } from 'lucide-react';
 
 const HowItWorks = () => {
     const [activeTab, setActiveTab] = useState('simple');
@@ -112,7 +112,7 @@ const HowItWorks = () => {
                                         Imagine an expert analyzing thousands of eye scans. Over time, patterns emerge, such as tiny spots or specific vessel changes, that correlate with certain conditions.
                                     </p>
                                     <p className="text-slate-500 leading-relaxed">
-                                        Our model operates on a similar principle. By processing thousands of examples of healthy and affected eyes (including cataracts, glaucoma, and diabetic retinopathy), it has been trained to identify visual features associated with each condition.
+                                        Our model operates on a similar principle. By processing thousands of examples of healthy and affected eyes (including AMD, cataracts, and diabetic retinopathy), it has been trained to identify visual features associated with each condition.
                                     </p>
                                 </motion.div>
 
@@ -130,7 +130,7 @@ const HowItWorks = () => {
                                         When you upload an image, the AI breaks it down into millions of tiny pixels. It compares these pixels against the patterns it knows.
                                     </p>
                                     <p className="text-slate-500 leading-relaxed">
-                                        In less than a second, it calculates a "confidence score." If it says 98% Glaucoma, it means the image looks 98% similar to the confirmed glaucoma cases it studied during training.
+                                        In less than a second, it calculates a "confidence score." If it says 98% Cataract, it means the image looks 98% similar to the confirmed cataract cases it studied during training.
                                     </p>
                                 </motion.div>
                             </div>
@@ -195,7 +195,7 @@ const HowItWorks = () => {
                                             Transfer Learning
                                         </h3>
                                         <p className="text-slate-500 text-sm leading-relaxed pl-10">
-                                            Instead of training from scratch, we use <span className="text-blue-600 font-semibold">Transfer Learning</span>. The model was pre-trained on ImageNet (1.2 million images) to learn basic visual features (edges, textures). We then replaced the final fully connected layer (<code className="text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded text-xs">fc</code>) to output our 4 specific classes: Normal, Cataract, Glaucoma, and Diabetic Retinopathy.
+                                            Instead of training from scratch, we use <span className="text-blue-600 font-semibold">Transfer Learning</span>. The model was pre-trained on ImageNet (1.2 million images) to learn basic visual features (edges, textures). We then replaced the final fully connected layer (<code className="text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded text-xs">fc</code>) to output our 4 specific classes: Normal, AMD, Cataract, and Diabetic Retinopathy.
                                         </p>
                                     </div>
                                 </motion.div>

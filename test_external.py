@@ -8,37 +8,30 @@ Usage:
     python test_external.py --clahe --tta      # Both enhancements
 
 Add your images to the folders in test_external_images/:
+    - amd/
     - cataract/
     - diabetic_retinopathy/
-    - glaucoma/
     - normal/
 """
 
 import argparse
 import torch
-import torch.nn as nn
-from torchvision import models, transforms
+from torchvision import transforms
 from PIL import Image
 import numpy as np
 import cv2
 from pathlib import Path
 
-# Config
+from shared import CLASS_NAMES, get_device, get_inference_transform, build_resnet18
+
 TEST_DIR = "test_external_images"
-CLASS_NAMES = ['cataract', 'diabetic_retinopathy', 'glaucoma', 'normal']
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'}
 
 
 def load_model(model_path="best_model.pth"):
-    device = torch.device(
-        "cuda:0" if torch.cuda.is_available()
-        else "mps" if torch.backends.mps.is_available()
-        else "cpu"
-    )
+    device = get_device()
 
-    model = models.resnet18(weights=None)
-    num_ftrs = model.fc.in_features
-    model.fc = nn.Linear(num_ftrs, len(CLASS_NAMES))
+    model = build_resnet18(len(CLASS_NAMES))
 
     state_dict = torch.load(model_path, map_location=device)
     model.load_state_dict(state_dict)
@@ -66,14 +59,6 @@ def apply_clahe(image):
     img = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
 
     return Image.fromarray(img)
-
-
-def get_transform():
-    return transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
 
 
 def get_tta_transforms():
@@ -136,7 +121,7 @@ def main():
 
     print("Loading model...")
     model, device = load_model()
-    transform = get_transform()
+    transform = get_inference_transform()
     print(f"Using device: {device}")
 
     # Show configuration

@@ -2,7 +2,6 @@ torch
 torchvision
 pillow
 scikit-learn
-matplotlib
 numpy
 fastapi
 uvicorn

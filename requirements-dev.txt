@@ -1,0 +1,5 @@
+# Local development & testing extras (not needed by the deployed API image)
+-r requirements.txt
+pytest
+httpx
+opencv-python-headless
