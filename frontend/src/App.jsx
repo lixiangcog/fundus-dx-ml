@@ -2,271 +2,157 @@ import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Activity, Archive, BrainCircuit, CircleAlert, Database, Eye,
-  FileImage, FileText, LoaderCircle, LocateFixed, RotateCcw,
-  ShieldCheck, UploadCloud, X,
+  Activity, ArrowUpRight, BrainCircuit, Check, CircleAlert, CircleDot,
+  FileImage, Github, ImagePlus, Layers3, LoaderCircle, Microscope,
+  Network, Play, RotateCcw, ScanLine, ShieldAlert, Sparkles, UploadCloud,
 } from 'lucide-react';
 
-const API_URL = import.meta.env.VITE_API_URL
-  || (import.meta.env.DEV ? 'http://localhost:8000' : window.location.origin);
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000' : window.location.origin);
 const MAX_FILE_SIZE = 12 * 1024 * 1024;
-
-const SAMPLES = [
-  { src: '/samples/normal.jpg', label: '正常样例', filename: 'sample_normal.jpg' },
-  { src: '/samples/cataract.jpg', label: '白内障样例', filename: 'sample_cataract.jpg' },
-  { src: '/samples/diabetic_retinopathy.jpg', label: '糖网样例', filename: 'sample_dr.jpg' },
+const ICONS = { 'quality-enhancement': Sparkles, 'structure-segmentation': Layers3, 'lesion-recognition': ScanLine, 'vascular-quantification': Network };
+const FALLBACK = [
+  { id:'quality-enhancement',number:'01',title:'质量增强',english:'QUALITY ENHANCEMENT',default_modality:'OCT',modalities:['OCT','OCTA','眼底彩照'],engine:'Structure-preserving CPU baseline',engine_type:'algorithm',method:'CLAHE + 非局部均值去噪 + 结构锐化',sample_url:'/samples/ophthalmic/oct_quality.png',source_url:'https://github.com/opencv/opencv',license:'Apache-2.0',output:'增强影像 + 对比度/噪声代理指标' },
+  { id:'structure-segmentation',number:'02',title:'结构分割',english:'STRUCTURE SEGMENTATION',default_modality:'OCT',modalities:['OCT'],engine:'ReLayNet · epoch 20',engine_type:'pretrained_model',method:'九类视网膜区域/层结构像素级分割',sample_url:'/samples/ophthalmic/oct_structure.png',source_url:'https://github.com/ai-med/relaynet_pytorch',license:'MIT',output:'结构叠加图 + 像素级分区统计' },
+  { id:'lesion-recognition',number:'03',title:'病灶识别',english:'LESION RECOGNITION',default_modality:'眼底彩照',modalities:['眼底彩照'],engine:'FundusDx ResNet18 · v2',engine_type:'trained_model',method:'AMD / 白内障 / 糖网 / 正常四分类 + CAM 热力图',sample_url:'/samples/ophthalmic/fundus_lesion.jpg',source_url:'https://github.com/lixiangcog/fundus-dx-ml',license:'Project model',output:'分类概率 + 类激活定位图' },
+  { id:'vascular-quantification',number:'04',title:'微血管定量',english:'MICROVASCULAR QUANTIFICATION',default_modality:'OCTA',modalities:['OCTA','眼底彩照'],engine:'Multi-scale vesselness + morphometry',engine_type:'algorithm',method:'多尺度 Hessian 血管响应、骨架化与分形/分支统计',sample_url:'/samples/ophthalmic/octa_vascular.png',source_url:'https://github.com/rmaphoh/AutoMorph',license:'Apache-2.0 / MIT references',output:'血管叠加图 + 密度/长度/分支/分形维数' },
 ];
 
-const CLASS_META = {
-  amd: { label: '年龄相关性黄斑变性', short: 'AMD', note: '图像特征更接近训练集中的 AMD 样本。', next: '建议结合黄斑区检查、OCT 等临床信息由眼科医生复核。' },
-  cataract: { label: '白内障', short: 'CATARACT', note: '图像特征更接近训练集中的白内障样本。', next: '建议结合裂隙灯检查、视力与晶状体混浊程度复核。' },
-  diabetic_retinopathy: { label: '糖尿病视网膜病变', short: 'DR', note: '图像特征更接近训练集中的糖尿病视网膜病变样本。', next: '建议由眼科医生复核病变分期，并结合糖尿病病史制定随访方案。' },
-  normal: { label: '未见模型已知异常', short: 'NORMAL', note: '在四个训练类别中，模型更倾向于正常类别。', next: '结果不能排除训练范围之外的眼病；如有症状，仍应接受专业检查。' },
-};
-
-const WORKFLOW = [
-  { number: '01', label: '影像导入与预处理', ready: true },
-  { number: '02', label: '智能眼底筛查', ready: true },
-  { number: '03', label: '病灶精准定位', ready: false },
-  { number: '04', label: '一键生成临床报告', ready: false },
-];
-
-const METRICS = [
-  { label: '诊断精度', english: 'Accuracy', value: '97.7%', width: '97.7%' },
-  { label: '精确率', english: 'Precision', value: '97.5%', width: '97.5%' },
-  { label: '敏感度', english: 'Sensitivity', value: '97.5%', width: '97.5%' },
-  { label: 'F1 得分', english: 'F1 Score', value: '97.5%', width: '97.5%' },
-];
-
-function createCaseId() {
-  const date = new Date().toISOString().slice(0, 10).replaceAll('-', '');
-  return `FDX-${date}-${Math.floor(1000 + Math.random() * 9000)}`;
-}
-
-function confidenceMeta(confidence) {
-  if (confidence >= 0.8) return { label: '高模型置信度', tone: 'high', message: '结果较集中，仍需结合临床资料复核。' };
-  if (confidence >= 0.6) return { label: '中等模型置信度', tone: 'medium', message: '存在一定不确定性，建议人工复核。' };
-  return { label: '低模型置信度', tone: 'low', message: '建议重新采集影像或直接转人工判读。' };
-}
+function fileName(id) { return `demo_${id.replaceAll('-','_')}.png`; }
+function engineType(type) { return type === 'pretrained_model' ? '预训练模型' : type === 'trained_model' ? '项目模型' : '实时算法'; }
 
 function App() {
-  const [stationOpen, setStationOpen] = useState(false);
+  const [capabilities, setCapabilities] = useState(FALLBACK);
+  const [activeId, setActiveId] = useState('quality-enhancement');
   const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState(null);
-  const [prediction, setPrediction] = useState(null);
-  const [latency, setLatency] = useState(null);
+  const [preview, setPreview] = useState('');
+  const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [service, setService] = useState('checking');
   const [dragging, setDragging] = useState(false);
-  const [error, setError] = useState(null);
-  const [serviceStatus, setServiceStatus] = useState('checking');
-  const [patientName, setPatientName] = useState('');
-  const [caseId] = useState(createCaseId);
-  const fileInputRef = useRef(null);
+  const [isDefault, setIsDefault] = useState(true);
+  const fileInput = useRef(null);
+  const active = capabilities.find((item) => item.id === activeId) || capabilities[0];
 
   useEffect(() => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
-    fetch(`${API_URL}/health`, { signal: controller.signal })
-      .then((response) => { if (!response.ok) throw new Error('Service unavailable'); return response.json(); })
-      .then((data) => setServiceStatus(data.model_loaded ? 'online' : 'degraded'))
-      .catch((requestError) => { if (requestError.name !== 'AbortError') setServiceStatus('offline'); })
-      .finally(() => clearTimeout(timer));
-    return () => { clearTimeout(timer); controller.abort(); };
+    Promise.all([fetch(`${API_URL}/capabilities`).then((r) => r.json()), fetch(`${API_URL}/health`).then((r) => r.json())])
+      .then(([catalog, health]) => { setCapabilities(catalog.capabilities); setService(health.status === 'ok' ? 'online' : 'degraded'); })
+      .catch(() => setService('offline'));
   }, []);
 
-  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
-  useEffect(() => {
-    document.body.classList.toggle('station-active', stationOpen);
-    return () => document.body.classList.remove('station-active');
-  }, [stationOpen]);
-
-  const processFile = (selectedFile) => {
-    if (!selectedFile?.type?.startsWith('image/')) { setError('请选择 JPG、PNG 或 WebP 格式的眼底图像。'); return; }
-    if (selectedFile.size > MAX_FILE_SIZE) { setError('图像不能超过 12 MB，请压缩后重试。'); return; }
-    if (preview) URL.revokeObjectURL(preview);
-    setFile(selectedFile); setPreview(URL.createObjectURL(selectedFile)); setPrediction(null); setLatency(null); setError(null);
+  const installFile = (nextFile, nextPreview, defaultFlag = false) => {
+    if (preview?.startsWith('blob:')) URL.revokeObjectURL(preview);
+    setFile(nextFile); setPreview(nextPreview); setIsDefault(defaultFlag); setResult(null); setError('');
   };
 
-  const handleFileChange = (event) => {
-    const selectedFile = event.target.files?.[0];
-    if (selectedFile) processFile(selectedFile);
-    event.target.value = '';
-  };
-
-  const loadSample = async (sample) => {
+  const loadDefault = async (capability = active) => {
     try {
-      const response = await fetch(sample.src);
+      const response = await fetch(capability.sample_url);
+      if (!response.ok) throw new Error();
       const blob = await response.blob();
-      processFile(new File([blob], sample.filename, { type: 'image/jpeg' }));
-    } catch { setError('示例图像加载失败，请稍后重试。'); }
+      installFile(new File([blob], fileName(capability.id), { type: blob.type || 'image/png' }), URL.createObjectURL(blob), true);
+    } catch { setError('默认病例加载失败，请刷新页面后重试。'); }
   };
 
-  const runScreening = async () => {
+  useEffect(() => { loadDefault(active); }, [activeId]);
+  useEffect(() => () => { if (preview?.startsWith('blob:')) URL.revokeObjectURL(preview); }, [preview]);
+
+  const chooseCapability = (id) => { if (loading || id === activeId) return; setActiveId(id); };
+  const processFile = (nextFile) => {
+    if (!nextFile?.type?.startsWith('image/')) { setError('请选择 JPG、PNG 或 WebP 影像。'); return; }
+    if (nextFile.size > MAX_FILE_SIZE) { setError('影像不能超过 12 MB。'); return; }
+    installFile(nextFile, URL.createObjectURL(nextFile));
+  };
+  const run = async () => {
     if (!file || loading) return;
-    setLoading(true); setPrediction(null); setError(null);
-    const formData = new FormData(); formData.append('file', file);
-    const startedAt = performance.now();
+    setLoading(true); setResult(null); setError('');
+    const data = new FormData(); data.append('file', file);
     try {
-      const response = await axios.post(`${API_URL}/predict`, formData);
-      setLatency(Math.round(performance.now() - startedAt));
-      setPrediction(response.data); setServiceStatus('online');
+      const response = await axios.post(`${API_URL}/analyze/${active.id}`, data);
+      setResult(response.data); setService('online');
     } catch (requestError) {
-      setError(requestError.response?.data?.detail || '示例图像加载失败，请稍后重试。');
-      if (!requestError.response) setServiceStatus('offline');
+      setError(requestError.response?.data?.detail || '推理服务暂时不可用，请稍后重试。');
+      if (!requestError.response) setService('offline');
     } finally { setLoading(false); }
   };
 
-  const reset = () => {
-    if (preview) URL.revokeObjectURL(preview);
-    setFile(null); setPreview(null); setPrediction(null); setLatency(null); setError(null);
-  };
-  const sortedProbabilities = prediction ? Object.entries(prediction.probabilities).sort(([, a], [, b]) => b - a) : [];
-  const resultMeta = prediction ? CLASS_META[prediction.prediction] : null;
-  const confidence = prediction ? confidenceMeta(prediction.confidence) : null;
-  const openStation = () => setStationOpen(true);
-
   return (
-    <div className="dark-shell">
-      <div className="scene-lines" aria-hidden="true">
-        <span className="network network-left" /><span className="network network-right" />
-        <span className="perspective-floor" /><span className="edge-line" />
-        <span className="signal-field" /><span className="ambient-scan" />
-      </div>
-
-      <header className="command-header">
-        <div className="brand-lockup">
-          <i /><strong>FundusDx-ResNet</strong><span>视界守望者 —— 全栈式眼底诊断平台</span>
-        </div>
-        <div className="machine-facts">
-          <div><small>MODEL ARCH</small><b>ResNet18</b></div>
-          <div><small>INPUT MATRIX</small><b>224 × 224 RGB</b></div>
-          <div><small>MEMORY FOOTPRINT</small><b>44.8 MB</b></div>
+    <div className="app-shell">
+      <div className="ambient-grid" aria-hidden="true"><i /><i /><i /><span /></div>
+      <header className="topbar">
+        <div className="brand"><span className="brand-mark"><Microscope size={20} /></span><div><strong>RETINA<strong className="accent">SCOPE</strong></strong><small>多模态眼科影像智能分析平台</small></div></div>
+        <div className="header-meta">
+          <span><small>SUPPORTED MODALITY</small><b>OCT · OCTA · CFP</b></span>
+          <span><small>ANALYSIS ENGINE</small><b>04 PIPELINES</b></span>
+          <span className={`service ${service}`}><small>SYSTEM STATUS</small><b><i /> {service === 'online' ? 'ONLINE' : service === 'offline' ? 'OFFLINE' : 'CHECKING'}</b></span>
         </div>
       </header>
 
-      <main className="command-main">
-        <a className="archive-button" href="https://github.com/lixiangcog/fundus-dx-ml" target="_blank" rel="noreferrer">
-          <Archive size={17} /><span>CLINICAL ARCHIVE</span>
-        </a>
+      <main>
+        <section className="intro-row">
+          <div><span className="eyebrow">OPHTHALMIC IMAGING WORKBENCH // V2.0</span><h1>从影像质量到微血管形态，<br /><em>一站式完成眼科影像分析。</em></h1></div>
+          <p>支持 OCT、OCTA 与眼底彩照。每项能力均已配置默认病例、可运行引擎和来源说明，可直接开始实验。</p>
+        </section>
 
-        <section className="systems-grid">
-          <div className="core-zone">
-            <div className="orbit-decoration"><span /><i /></div>
-            <button className="analysis-core" onClick={openStation} aria-label="进入诊断工作站">
-              <span className="core-circle core-circle-a" /><span className="core-circle core-circle-b" /><span className="core-circle core-circle-c" />
-              <span className="core-cross core-cross-v" /><span className="core-cross core-cross-h" />
-              <span className="core-sweep" />
-              <span className="core-pip pip-a" /><span className="core-pip pip-b" /><span className="core-pip pip-c" />
-              <span className="core-title"><strong>眼底分析核</strong><b>ResNet18 分类引擎</b></span>
-            </button>
-          </div>
+        <nav className="pipeline-nav" aria-label="分析功能">
+          {capabilities.map((item) => {
+            const Icon = ICONS[item.id] || Activity; const selected = item.id === activeId;
+            return <button key={item.id} className={selected ? 'active' : ''} onClick={() => chooseCapability(item.id)}>
+              <span className="pipeline-no">// {item.number}</span><span className="pipeline-icon"><Icon size={18} /></span><span><strong>{item.title}</strong><small>{item.english}</small></span><i className="state-dot" />
+            </button>;
+          })}
+        </nav>
 
-          <div className="stream-zone" aria-label="特征流传输">
-            <span className="stream-label stream-label-top">▲ GLOBAL STREAM (全局结构流)</span>
-            <div className="stream-bar"><i /></div>
-            <span className="stream-label stream-label-bottom">▼ LOCAL STREAM (局部纹理流)</span>
-          </div>
+        <section className="workbench">
+          <aside className="engine-panel">
+            <div className="panel-kicker"><CircleDot size={13} /> ACTIVE PIPELINE</div>
+            <h2>{active.number}<span>/</span>{active.title}</h2><p className="english-title">{active.english}</p>
+            <div className="modality-tags">{active.modalities.map((modality) => <span key={modality} className={modality === active.default_modality ? 'primary' : ''}>{modality}</span>)}</div>
+            <dl>
+              <div><dt>ENGINE</dt><dd>{active.engine}</dd></div><div><dt>METHOD</dt><dd>{active.method}</dd></div><div><dt>OUTPUT</dt><dd>{active.output}</dd></div>
+            </dl>
+            <a className="source-link" href={active.source_url} target="_blank" rel="noreferrer"><Github size={15} /><span><b>OPEN SOURCE REFERENCE</b><small>{active.license} · 查看代码来源</small></span><ArrowUpRight size={15} /></a>
+            <div className="engine-type"><Check size={13} /><span>{engineType(active.engine_type)}</span><b>READY</b></div>
+          </aside>
 
-          <div className="workflow-zone">
-            <div className="workflow-spine"><i /></div>
-            <div className="workflow-cards">
-              {WORKFLOW.map((step) => (
-                <button className={`workflow-card ${step.ready ? 'ready' : 'planned'}`} key={step.number} onClick={openStation}>
-                  <span className="branch" />
-                  <small>STEP // {step.number}</small>
-                  <strong>{step.label}</strong>
-                </button>
-              ))}
+          <section className="visual-stage">
+            <div className="stage-head"><span><FileImage size={14} /> INPUT / 输入影像</span><div><b>{isDefault ? 'DEFAULT CASE' : 'USER IMAGE'}</b><small>{active.default_modality}</small></div></div>
+            <div className={`image-frame ${dragging ? 'dragging' : ''}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); processFile(event.dataTransfer.files?.[0]); }}>
+              <span className="corner tl" /><span className="corner tr" /><span className="corner bl" /><span className="corner br" /><span className="scan-beam" />
+              {preview ? <img src={preview} alt={`${active.title}输入影像`} /> : <div className="empty-image"><ImagePlus size={30} />等待影像</div>}
+              <div className="image-hud"><span>W {result?.input?.width || '---'}</span><span>H {result?.input?.height || '---'}</span><span>RGB / 8 BIT</span></div>
             </div>
-          </div>
+            <div className="input-actions"><button onClick={() => fileInput.current?.click()}><UploadCloud size={15} />上传影像</button><button onClick={() => loadDefault()}><RotateCcw size={14} />恢复默认病例</button><input ref={fileInput} type="file" hidden accept="image/jpeg,image/png,image/webp" onChange={(event) => { if (event.target.files?.[0]) processFile(event.target.files[0]); event.target.value=''; }} /></div>
+          </section>
 
-          <aside className="performance-panel">
-            <h2>VALIDATION PERFORMANCE</h2>
-            <div className="performance-rule" />
-            <div className="performance-list">
-              {METRICS.map((metric) => (
-                <div className="performance-row" key={metric.english}>
-                  <div><span>{metric.label} ({metric.english})</span><b>{metric.value}</b></div>
-                  <div className="segmented-meter"><i style={{ width: metric.width }} /></div>
-                </div>
-              ))}
+          <div className={`data-bridge ${loading ? 'running' : ''}`} aria-hidden="true"><span /><i /><b>AI FLOW</b></div>
+
+          <section className="visual-stage output-stage">
+            <div className="stage-head"><span><BrainCircuit size={14} /> OUTPUT / 分析结果</span><div>{result && <><b>{result.runtime_ms} ms</b><small>RUNTIME</small></>}</div></div>
+            <div className={`image-frame ${result ? 'has-result' : ''}`}>
+              <span className="corner tl" /><span className="corner tr" /><span className="corner bl" /><span className="corner br" />
+              <AnimatePresence mode="wait">
+                {loading ? <motion.div key="loading" className="processing" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}><span><LoaderCircle size={30} /></span><strong>ENGINE PROCESSING</strong><small>{active.engine}</small><i /></motion.div>
+                  : result ? <motion.div key="result" className="result-image" initial={{opacity:0,scale:.985}} animate={{opacity:1,scale:1}}><img src={result.result_image} alt={`${active.title}分析结果`} /><span className="result-scan" /><div className="result-label"><Check size={12} /> ANALYSIS COMPLETE</div></motion.div>
+                  : <motion.div key="empty" className="waiting" initial={{opacity:0}} animate={{opacity:1}}><span className="radar"><Activity size={28} /></span><strong>等待执行分析</strong><small>选择默认病例或上传影像后启动引擎</small></motion.div>}
+              </AnimatePresence>
             </div>
-            <div className="system-terminal">
-              <p><b>[SYSTEM]</b> 模型权重加载完毕...</p>
-              <p><b>[RESNET]</b> 残差特征引擎就绪...</p>
-              <p><b>[STATUS]</b> {serviceStatus === 'online' ? '点击节点进入诊断工作站' : '正在连接推理服务'}<i /></p>
-            </div>
+            <button className="run-button" onClick={run} disabled={!file || loading}><Play size={16} fill="currentColor" /><span>{loading ? '正在运行分析引擎' : `运行 ${active.title}`}</span><small>RUN PIPELINE</small></button>
+          </section>
+
+          <aside className="metrics-panel">
+            <div className="panel-kicker"><Activity size={13} /> QUANTITATIVE OUTPUT</div>
+            {result ? <motion.div className="result-data" initial={{opacity:0,y:5}} animate={{opacity:1,y:0}}>
+              <h3>{result.summary}</h3><div className="metric-list">{result.metrics.map((metric,index) => <div key={`${metric.label}-${index}`}><span>{metric.label}<small>{metric.detail}</small></span><strong>{metric.value}<em>{metric.unit}</em></strong></div>)}</div>
+              {result.probabilities && <div className="probability-mini">{Object.entries(result.probabilities).sort((a,b)=>b[1]-a[1]).map(([name,value]) => <div key={name}><span>{name.replaceAll('_',' ')}</span><i><b style={{width:`${value*100}%`}} /></i><strong>{(value*100).toFixed(1)}%</strong></div>)}</div>}
+              <p className="result-notice"><CircleAlert size={14} />{result.notice}</p>
+            </motion.div> : <div className="metric-placeholder"><div className="signal-bars">{[24,48,34,70,52,86,42,64,30,74].map((h,i)=><i key={i} style={{height:`${h}%`}} />)}</div><p>运行后将在这里显示结构化指标与模型说明。</p></div>}
           </aside>
         </section>
-        <p className="research-note">RESEARCH DEMO · NOT A MEDICAL DEVICE</p>
+
+        {error && <div className="error-banner"><CircleAlert size={16} />{error}</div>}
+        <footer><p><ShieldAlert size={14} />科研与教学演示系统，输出不构成临床诊断或治疗建议。</p><span>MODEL & CODE PROVENANCE AVAILABLE · BUILD 2026.08</span></footer>
       </main>
-
-      <AnimatePresence>
-        {stationOpen && (
-          <motion.div className="diagnostic-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <motion.section className="diagnostic-console" initial={{ scale: 0.99, y: 8 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.99, y: 8 }}>
-              <header className="console-header">
-                <div><span className="console-mark"><Eye size={20} /></span><div><strong>Fundus-DX 诊断工作站</strong><small>RESNET18 FUNDUS CLASSIFICATION CONSOLE</small></div></div>
-                <div className="console-status"><span><i /> ENGINE ONLINE</span><b>{caseId}</b><button onClick={() => setStationOpen(false)} aria-label="关闭工作站"><X size={20} /></button></div>
-              </header>
-
-              <div className="patient-bar">
-                <label><span>PATIENT NAME / 患者姓名</span><input value={patientName} onChange={(event) => setPatientName(event.target.value)} placeholder="输入患者姓名或匿名" /></label>
-                <label><span>CASE ID / 病例编号</span><input value={caseId} readOnly /></label>
-                <div><span>EXAMINATION</span><strong>彩色眼底照相 · 四分类筛查</strong></div>
-                <div><span>MODEL</span><strong>ResNet18 · v1.1.0</strong></div>
-              </div>
-
-              <div className="console-workbench">
-                <section className="scan-pane">
-                  <div className="pane-heading"><span>ORIGINAL</span><small>原始眼底影像</small>{file && <button onClick={reset}><RotateCcw size={13} /> RESET</button>}</div>
-                  <div className={`scan-stage ${preview ? 'loaded' : ''} ${dragging ? 'dragging' : ''}`}
-                    onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
-                    onDrop={(event) => { event.preventDefault(); setDragging(false); processFile(event.dataTransfer.files?.[0]); }}
-                    onClick={() => !preview && fileInputRef.current?.click()} role="button" tabIndex={0}>
-                    <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFileChange} hidden />
-                    <span className="active-scan" />
-                    {preview ? <><img src={preview} alt="待分析眼底照片" /><button className="replace-scan" onClick={(event) => { event.stopPropagation(); fileInputRef.current?.click(); }}>更换影像</button></>
-                      : <div className="upload-state"><UploadCloud size={34} /><strong>[ 1 ] 导入眼底影像</strong><p>拖放或点击选择 JPG / PNG / WEBP</p><small>MAX FILE SIZE 12 MB</small></div>}
-                  </div>
-                  <div className="sample-strip"><span>DEMO DATA</span>{SAMPLES.map((sample) => <button key={sample.filename} onClick={() => loadSample(sample)}><img src={sample.src} alt="" /><b>{sample.label}</b></button>)}</div>
-                </section>
-
-                <section className="result-pane">
-                  <div className="pane-heading"><span>ANALYSIS</span><small>AI 智能分析</small><em>SOFTMAX · 4 CLASSES</em></div>
-                  <div className="result-stage"><AnimatePresence mode="wait">
-                    {loading ? <motion.div className="engine-state" key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <span className="engine-orbit"><BrainCircuit size={32} /></span><strong>正在进行特征解码...</strong><p>RESIDUAL FEATURE EXTRACTION IN PROGRESS</p><div className="engine-progress"><i /></div>
-                    </motion.div> : prediction ? <motion.div className="diagnosis-output" key="result" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
-                      <div className="diagnosis-summary"><div><small>AI SCREENING CONCLUSION</small><h2>{resultMeta.label}</h2><p>{resultMeta.note}</p></div><div className="score-disc"><b>{(prediction.confidence * 100).toFixed(1)}</b><span>%</span><small>CONFIDENCE</small></div></div>
-                      <div className={`certainty-line ${confidence.tone}`}><CircleAlert size={15} /><span><b>{confidence.label}</b>{confidence.message}</span></div>
-                      <div className="probability-table"><div className="probability-head"><span>CLASS PROBABILITY</span><small>MODEL OUTPUT</small></div>
-                        {sortedProbabilities.map(([className, probability]) => {
-                          const meta = CLASS_META[className]; const top = className === prediction.prediction;
-                          return <div className={`probability-row ${top ? 'top' : ''}`} key={className}><span><b>{meta.label}</b><small>{meta.short}</small></span><div><i style={{ width: `${Math.max(0.5, probability * 100)}%` }} /></div><strong>{(probability * 100).toFixed(1)}%</strong></div>;
-                        })}
-                      </div>
-                      <div className="review-advice"><ShieldCheck size={17} /><span><b>临床复核建议</b><p>{resultMeta.next}</p></span></div>
-                      <div className="runtime-data"><span>API {latency} ms</span><span>INFERENCE {prediction.inference_ms} ms</span><span>MODEL {prediction.model_version}</span></div>
-                    </motion.div> : <motion.div className="engine-state waiting" key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                      <span className="engine-orbit"><Activity size={32} /></span><strong>等待引擎分析...</strong><p>IMPORT FUNDUS IMAGE TO INITIALIZE</p><div className="idle-bars">{[42,68,36,74,52,82,45,62,34,70].map((height,index) => <i key={index} style={{ height: `${height}%` }} />)}</div>
-                    </motion.div>}
-                  </AnimatePresence></div>
-                </section>
-              </div>
-
-              {error && <div className="console-error" role="alert"><CircleAlert size={15} />{error}</div>}
-              <div className="console-actions">
-                <button className={file ? 'complete' : 'active'} onClick={() => fileInputRef.current?.click()}><span>[ 1 ]</span><FileImage size={16} />影像导入</button>
-                <button className={prediction ? 'complete' : file ? 'active primary' : ''} onClick={runScreening} disabled={!file || loading}><span>[ 2 ]</span>{loading ? <LoaderCircle className="spin" size={16} /> : <BrainCircuit size={16} />}智能筛查</button>
-                <button disabled><span>[ 3 ]</span><LocateFixed size={16} />病灶定位<em>PHASE 02</em></button>
-                <button disabled><span>[ 4 ]</span><FileText size={16} />生成报告<em>PHASE 03</em></button>
-              </div>
-              <footer className="console-footer"><p><CircleAlert size={14} /> 本系统仅供科研与教学演示，输出不构成临床诊断或治疗建议。</p><span><Database size={13} /> FUNDUS-DX CORE · SYSTEM READY</span></footer>
-            </motion.section>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
