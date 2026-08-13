@@ -130,6 +130,7 @@ function App() {
       <div className="scene-lines" aria-hidden="true">
         <span className="network network-left" /><span className="network network-right" />
         <span className="perspective-floor" /><span className="edge-line" />
+        <span className="signal-field" /><span className="ambient-scan" />
       </div>
 
       <header className="command-header">
@@ -155,6 +156,7 @@ function App() {
               <span className="core-circle core-circle-a" /><span className="core-circle core-circle-b" /><span className="core-circle core-circle-c" />
               <span className="core-cross core-cross-v" /><span className="core-cross core-cross-h" />
               <span className="core-sweep" />
+              <span className="core-pip pip-a" /><span className="core-pip pip-b" /><span className="core-pip pip-c" />
               <span className="core-title"><strong>眼底分析核</strong><b>ResNet18 分类引擎</b></span>
             </button>
           </div>

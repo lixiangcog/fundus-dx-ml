@@ -205,6 +205,121 @@ button { color: inherit; }
 .console-footer { height:34px; flex:none; padding:0 20px; display:flex; align-items:center; justify-content:space-between; border-top:1px solid rgba(0,231,239,.18); background:#031018; }.console-footer p,.console-footer span { margin:0; display:flex; align-items:center; gap:7px; color:#537584; font-size:9px; }.console-footer span { color:#4c8993; font:500 8px/1 "IBM Plex Mono",monospace; }
 .spin { animation:spin 1s linear infinite; }
 
+/* Active telemetry layer */
+.signal-field {
+  position:absolute; inset:102px 0 0; opacity:.5;
+  background-image:
+    radial-gradient(circle,rgba(0,231,239,.8) 0 1px,transparent 1.5px),
+    radial-gradient(circle,rgba(0,174,187,.65) 0 1px,transparent 1.5px);
+  background-position:0 0,47px 81px; background-size:137px 119px,181px 151px;
+  mask-image:linear-gradient(90deg,transparent,#000 13%,#000 87%,transparent);
+  animation:signalDrift 24s linear infinite;
+}
+.ambient-scan {
+  position:absolute; left:-22%; top:102px; width:18%; height:calc(100% - 102px);
+  background:linear-gradient(90deg,transparent,rgba(0,231,239,.045),rgba(0,231,239,.11),transparent);
+  transform:skewX(-9deg); filter:blur(2px); animation:ambientSweep 11s ease-in-out infinite;
+}
+.network { animation:networkPulse 5.5s ease-in-out infinite alternate; }
+.network-right { animation-delay:-2.7s; }
+.perspective-floor { animation:floorTravel 14s linear infinite; }
+.edge-line { box-shadow:0 0 8px rgba(0,231,239,.22); animation:edgeCharge 4s ease-in-out infinite; }
+.command-header::before {
+  content:""; position:absolute; left:-22%; bottom:-1px; width:18%; height:1px;
+  background:linear-gradient(90deg,transparent,#fff,var(--cyan),transparent);
+  box-shadow:0 0 9px var(--cyan); animation:headerPacket 7s linear infinite;
+}
+.brand-lockup > i { animation:beaconPulse 2.2s ease-in-out infinite; }
+.brand-lockup strong { animation:brandGlow 4.8s ease-in-out infinite; }
+.machine-facts b { animation:telemetryFlicker 5s steps(1) infinite; }
+.machine-facts div:nth-child(2) b { animation-delay:-1.6s; }
+.machine-facts div:nth-child(3) b { animation-delay:-3.1s; }
+.archive-button { overflow:hidden; }
+.archive-button::after {
+  content:""; position:absolute; top:0; bottom:0; left:-42%; width:28%;
+  background:linear-gradient(90deg,transparent,rgba(0,231,239,.2),rgba(255,255,255,.28),transparent);
+  transform:skewX(-18deg); animation:buttonSweep 5.8s ease-in-out infinite;
+}
+.analysis-core { animation:coreBreathe 3.8s ease-in-out infinite; }
+.analysis-core::before { animation:dashedOrbit 23s linear infinite; }
+.analysis-core::after { animation:ringBreath 4.6s ease-in-out infinite; }
+.core-circle-b { animation:innerPulse 3.2s ease-in-out infinite; }
+.core-circle-c { animation:innerPulse 3.2s ease-in-out -1.6s infinite reverse; }
+.core-cross-v { animation:crossPulse 3s ease-in-out infinite; }
+.core-cross-h { animation:crossPulse 3s ease-in-out -1.5s infinite; }
+.core-pip { position:absolute; z-index:3; border-radius:50%; pointer-events:none; animation:spin linear infinite; }
+.core-pip::before { content:""; position:absolute; width:7px; height:7px; border-radius:50%; background:#fff; box-shadow:0 0 6px #fff,0 0 15px var(--cyan),0 0 28px var(--cyan); }
+.pip-a { inset:25px; animation-duration:8s; }.pip-a::before { top:11%; left:14%; }
+.pip-b { inset:82px; animation-duration:5.5s; animation-direction:reverse; }.pip-b::before { top:71%; left:2%; width:5px; height:5px; }
+.pip-c { inset:146px; animation-duration:4.2s; }.pip-c::before { top:3%; left:54%; width:4px; height:4px; }
+.core-title strong { animation:titlePulse 3.4s ease-in-out infinite; }
+.core-title b { position:relative; overflow:hidden; }
+.core-title b::after { content:""; position:absolute; inset:0 auto 0 -35%; width:25%; background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent); animation:labelSweep 4.5s ease-in-out infinite; }
+.stream-zone::before,.stream-zone::after { content:""; position:absolute; top:50%; width:5px; height:5px; margin-top:-2px; border-radius:50%; background:#fff; box-shadow:0 0 6px #fff,0 0 14px var(--cyan); animation:streamSpark 2.8s linear infinite; }
+.stream-zone::before { left:0; }.stream-zone::after { left:0; animation-delay:-1.4s; }
+.stream-label { animation:labelSignal 3s ease-in-out infinite; }.stream-label-bottom { animation-delay:-1.5s; }
+.stream-bar::after { content:""; position:absolute; inset:1px; opacity:.55; background:repeating-linear-gradient(90deg,transparent 0 13px,rgba(0,231,239,.82) 13px 15px,transparent 15px 28px); animation:packetGrid 1.7s linear infinite; }
+.workflow-card { overflow:hidden; animation:cardStandby 6s ease-in-out infinite; }
+.workflow-card:nth-child(2) { animation-delay:-4.5s; }.workflow-card:nth-child(3) { animation-delay:-3s; }.workflow-card:nth-child(4) { animation-delay:-1.5s; }
+.workflow-card::before { content:""; position:absolute; top:0; bottom:0; left:-30%; width:16%; background:linear-gradient(90deg,transparent,rgba(0,231,239,.12),transparent); transform:skewX(-14deg); animation:cardSweep 5.2s ease-in-out infinite; }
+.workflow-card:nth-child(2)::before { animation-delay:-3.9s; }.workflow-card:nth-child(3)::before { animation-delay:-2.6s; }.workflow-card:nth-child(4)::before { animation-delay:-1.3s; }
+.workflow-card .branch::after { content:""; position:absolute; top:-2px; left:0; width:6px; height:6px; border-radius:50%; background:#fff; box-shadow:0 0 7px #fff,0 0 13px var(--cyan); animation:branchPacket 2.6s ease-in-out infinite; }
+.workflow-card:nth-child(2) .branch::after { animation-delay:-1.95s; }.workflow-card:nth-child(3) .branch::after { animation-delay:-1.3s; }.workflow-card:nth-child(4) .branch::after { animation-delay:-.65s; }
+.performance-panel { position:relative; }
+.performance-panel::before { content:""; position:absolute; z-index:2; left:0; right:0; top:0; height:2px; background:linear-gradient(90deg,transparent,var(--cyan),#fff,var(--cyan),transparent); box-shadow:0 0 12px rgba(0,231,239,.7); animation:panelScan 6.5s ease-in-out infinite; pointer-events:none; }
+.performance-panel::after { content:""; position:absolute; inset:0; opacity:.25; background:linear-gradient(115deg,transparent 0 46%,rgba(0,231,239,.09) 49%,rgba(255,255,255,.06) 50%,transparent 54%); background-size:280% 100%; animation:panelSheen 9s linear infinite; pointer-events:none; }
+.segmented-meter i { position:relative; overflow:hidden; animation:meterCharge 2.8s ease-in-out infinite; }
+.segmented-meter i::after { content:""; position:absolute; top:0; bottom:0; left:-25%; width:20%; background:linear-gradient(90deg,transparent,#fff,transparent); animation:meterSweep 2.6s linear infinite; }
+.performance-row:nth-child(2) i,.performance-row:nth-child(2) i::after { animation-delay:-.6s; }.performance-row:nth-child(3) i,.performance-row:nth-child(3) i::after { animation-delay:-1.2s; }.performance-row:nth-child(4) i,.performance-row:nth-child(4) i::after { animation-delay:-1.8s; }
+.system-terminal { animation:terminalGlow 4s ease-in-out infinite; }
+.system-terminal p { animation:terminalLine 4.5s ease-in-out infinite; }.system-terminal p:nth-child(2) { animation-delay:-3s; }.system-terminal p:nth-child(3) { animation-delay:-1.5s; }
+.diagnostic-console { position:relative; animation:consoleOnline 4.5s ease-in-out infinite; }
+.diagnostic-console::before { content:""; position:absolute; z-index:8; left:-20%; top:0; width:16%; height:1px; background:linear-gradient(90deg,transparent,#fff,var(--cyan),transparent); box-shadow:0 0 9px var(--cyan); animation:consoleHeaderPacket 7s linear infinite; pointer-events:none; }
+.console-mark { animation:consoleMark 2.7s ease-in-out infinite; }.console-status span i { animation:statusPulse 1.8s ease-in-out infinite; }
+.scan-stage::after,.result-stage::after { content:""; position:absolute; inset:0; pointer-events:none; background:radial-gradient(circle at 50% 50%,transparent 53%,rgba(0,231,239,.04) 100%); animation:viewportPulse 4s ease-in-out infinite; }
+.result-stage::after { animation-delay:-2s; }
+.engine-orbit { position:relative; animation:enginePulse 2.8s ease-in-out infinite; }
+.engine-orbit::before { content:""; position:absolute; inset:-9px; border:1px dashed rgba(0,231,239,.4); border-radius:50%; animation:spin 9s linear infinite; }
+.score-disc { animation:scorePulse 3s ease-in-out infinite; }
+.probability-row.top > div i { position:relative; overflow:hidden; }.probability-row.top > div i::after { content:""; position:absolute; inset:0 auto 0 -20%; width:18%; background:linear-gradient(90deg,transparent,#fff,transparent); animation:meterSweep 2.4s linear infinite; }
+
+@keyframes signalDrift { to { background-position:274px 238px,409px 383px; } }
+@keyframes ambientSweep { 0%,12% { transform:translateX(0) skewX(-9deg); opacity:0; } 35% { opacity:.9; } 72%,100% { transform:translateX(790%) skewX(-9deg); opacity:0; } }
+@keyframes networkPulse { 0% { opacity:.28; filter:drop-shadow(0 0 0 transparent); } 100% { opacity:.82; filter:drop-shadow(0 0 7px rgba(0,231,239,.18)); } }
+@keyframes floorTravel { to { background-position:0 68px,132px 0; } }
+@keyframes edgeCharge { 0%,100% { opacity:.35; } 45% { opacity:1; } }
+@keyframes headerPacket { to { left:110%; } }
+@keyframes beaconPulse { 0%,100% { opacity:.65; box-shadow:0 0 8px var(--cyan); } 50% { opacity:1; box-shadow:0 0 24px var(--cyan),0 0 42px rgba(0,231,239,.32); } }
+@keyframes brandGlow { 0%,100% { text-shadow:0 0 8px rgba(0,231,239,.25); } 50% { text-shadow:0 0 18px rgba(0,231,239,.72); } }
+@keyframes telemetryFlicker { 0%,91%,94%,100% { opacity:1; } 92%,95% { opacity:.45; } }
+@keyframes buttonSweep { 0%,18% { left:-42%; opacity:0; } 45% { opacity:1; } 72%,100% { left:125%; opacity:0; } }
+@keyframes coreBreathe { 0%,100% { filter:drop-shadow(0 0 0 rgba(0,231,239,0)); } 50% { filter:drop-shadow(0 0 18px rgba(0,231,239,.14)); } }
+@keyframes dashedOrbit { to { transform:rotate(-360deg); } }
+@keyframes ringBreath { 0%,100% { opacity:.48; box-shadow:inset 0 0 20px rgba(0,231,239,.03); } 50% { opacity:1; box-shadow:inset 0 0 48px rgba(0,231,239,.1); } }
+@keyframes innerPulse { 0%,100% { opacity:.6; box-shadow:0 0 16px rgba(0,231,239,.08),inset 0 0 20px rgba(0,231,239,.06); } 50% { opacity:1; box-shadow:0 0 38px rgba(0,231,239,.22),inset 0 0 42px rgba(0,231,239,.14); } }
+@keyframes crossPulse { 0%,100% { opacity:.25; } 50% { opacity:.75; } }
+@keyframes titlePulse { 0%,100% { text-shadow:0 0 8px rgba(0,231,239,.28); } 50% { text-shadow:0 0 19px rgba(0,231,239,.7); } }
+@keyframes labelSweep { 0%,25% { left:-35%; } 65%,100% { left:125%; } }
+@keyframes streamSpark { from { transform:translateX(-8px); opacity:0; } 18% { opacity:1; } to { transform:translateX(225px); opacity:0; } }
+@keyframes labelSignal { 0%,100% { opacity:.65; } 50% { opacity:1; text-shadow:0 0 8px rgba(0,231,239,.46); } }
+@keyframes packetGrid { to { background-position:56px 0; } }
+@keyframes cardStandby { 0%,100% { border-color:rgba(0,218,231,.28); } 20% { border-color:rgba(0,231,239,.72); box-shadow:inset 8px 0 18px rgba(0,231,239,.045); } 40% { border-color:rgba(0,218,231,.28); box-shadow:none; } }
+@keyframes cardSweep { 0%,28% { left:-30%; opacity:0; } 52% { opacity:1; } 78%,100% { left:125%; opacity:0; } }
+@keyframes branchPacket { from { transform:translateX(0); opacity:0; } 20% { opacity:1; } to { transform:translateX(49px); opacity:0; } }
+@keyframes panelScan { 0%,100% { top:0; opacity:0; } 12% { opacity:1; } 72% { opacity:.75; } 84%,100% { top:100%; opacity:0; } }
+@keyframes panelSheen { to { background-position:-180% 0; } }
+@keyframes meterCharge { 0%,100% { filter:brightness(.78); } 50% { filter:brightness(1.35); } }
+@keyframes meterSweep { to { left:120%; } }
+@keyframes terminalGlow { 0%,100% { box-shadow:inset 0 0 0 rgba(0,231,239,0); } 50% { box-shadow:inset 0 0 19px rgba(0,231,239,.045),0 0 13px rgba(0,231,239,.05); } }
+@keyframes terminalLine { 0%,100% { opacity:.68; } 18% { opacity:1; text-shadow:0 0 7px rgba(0,231,239,.35); } 36% { opacity:.68; } }
+@keyframes consoleOnline { 0%,100% { box-shadow:0 0 40px rgba(0,231,239,.06); } 50% { box-shadow:0 0 70px rgba(0,231,239,.13); } }
+@keyframes consoleHeaderPacket { to { left:115%; } }
+@keyframes consoleMark { 0%,100% { box-shadow:0 0 0 rgba(0,231,239,0); } 50% { box-shadow:0 0 20px rgba(0,231,239,.4); } }
+@keyframes statusPulse { 0%,100% { opacity:.55; transform:scale(.78); } 50% { opacity:1; transform:scale(1.18); } }
+@keyframes viewportPulse { 0%,100% { opacity:.35; } 50% { opacity:1; } }
+@keyframes enginePulse { 0%,100% { box-shadow:0 0 12px rgba(0,231,239,.08); } 50% { box-shadow:0 0 31px rgba(0,231,239,.24); } }
+@keyframes scorePulse { 0%,100% { box-shadow:0 0 10px rgba(0,231,239,.1); } 50% { box-shadow:0 0 25px rgba(0,231,239,.28); } }
+
 @keyframes spin { to { transform:rotate(360deg); } }
 @keyframes dataFlow { from { transform:translateX(-110%); } to { transform:translateX(260%); } }
 @keyframes spinePulse { 0%,100% { top:3%; opacity:.2; } 50% { top:78%; opacity:1; } }
