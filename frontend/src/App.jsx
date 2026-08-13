@@ -10,12 +10,14 @@ import AMDWorkspace from './AMDWorkspace';
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000' : window.location.origin);
 const MAX_FILE_SIZE = 12 * 1024 * 1024;
-const ICONS = { 'quality-enhancement': Sparkles, 'structure-segmentation': Layers3, 'lesion-recognition': ScanLine, 'vascular-quantification': Network };
+const ICONS = { 'quality-enhancement': Sparkles, 'structure-segmentation': Layers3, 'disease-screening': ScanLine, 'vascular-quantification': Network, 'fundus-lesion-quantification': CircleDot, 'oct-fluid-quantification': Activity };
 const FALLBACK = [
-  { id:'quality-enhancement',number:'01',title:'质量增强',english:'QUALITY ENHANCEMENT',default_modality:'OCT',modalities:['OCT','OCTA','眼底彩照'],engine:'Structure-preserving CPU baseline',engine_type:'algorithm',method:'CLAHE + 非局部均值去噪 + 结构锐化',sample_url:'/samples/ophthalmic/oct_quality.png',source_url:'https://github.com/opencv/opencv',license:'Apache-2.0',output:'增强影像 + 对比度/噪声代理指标' },
-  { id:'structure-segmentation',number:'02',title:'结构分割',english:'STRUCTURE SEGMENTATION',default_modality:'OCT',modalities:['OCT'],engine:'ReLayNet · epoch 20',engine_type:'pretrained_model',method:'九类视网膜区域/层结构像素级分割',sample_url:'/samples/ophthalmic/oct_structure.png',source_url:'https://github.com/ai-med/relaynet_pytorch',license:'MIT',output:'结构叠加图 + 像素级分区统计' },
-  { id:'lesion-recognition',number:'03',title:'病灶识别',english:'LESION RECOGNITION',default_modality:'眼底彩照',modalities:['眼底彩照'],engine:'FundusDx ResNet18 · v2',engine_type:'trained_model',method:'AMD / 白内障 / 糖网 / 正常四分类 + CAM 热力图',sample_url:'/samples/ophthalmic/fundus_lesion.jpg',source_url:'https://github.com/lixiangcog/fundus-dx-ml',license:'Project model',output:'分类概率 + 类激活定位图' },
-  { id:'vascular-quantification',number:'04',title:'微血管定量',english:'MICROVASCULAR QUANTIFICATION',default_modality:'OCTA',modalities:['OCTA','眼底彩照'],engine:'Multi-scale vesselness + morphometry',engine_type:'algorithm',method:'多尺度 Hessian 血管响应、骨架化与分形/分支统计',sample_url:'/samples/ophthalmic/octa_vascular.png',source_url:'https://github.com/rmaphoh/AutoMorph',license:'Apache-2.0 / MIT references',output:'血管叠加图 + 密度/长度/分支/分形维数' },
+  { id:'quality-enhancement',number:'01',title:'质量增强',english:'QUALITY ENHANCEMENT',default_modality:'OCT',modalities:['OCT','OCTA','眼底彩照'],engine:'Calibrated NLM · v1',engine_type:'algorithm',method:'固定噪声模型标定的非局部均值去噪',sample_id:'oct-enhancement-duke-s03-4',sample_url:'/research-samples/oct-enhancement-duke-s03-4',source_url:'https://github.com/opencv/opencv',license:'Apache-2.0',output:'增强影像 + 配对 PSNR / SSIM' },
+  { id:'structure-segmentation',number:'02',title:'OCT 结构分割',english:'OCT STRUCTURE SEGMENTATION',default_modality:'OCT',modalities:['OCT'],engine:'Duke residual U-Net · v1',engine_type:'trained_model',method:'8 层结构 + 液体的十类像素级分割',sample_id:'oct-structure-duke-s03-4',sample_url:'/research-samples/oct-structure-duke-s03-4',source_url:'https://github.com/ClinicalAI/MIRAGE',license:'Research model / CC BY 4.0 data release',output:'层结构叠加 + Dice / IoU / 厚度代理' },
+  { id:'disease-screening',number:'03',title:'眼底疾病筛查',english:'FUNDUS DISEASE SCREENING',default_modality:'眼底彩照',modalities:['眼底彩照'],engine:'FundusDx ResNet18 · v2',engine_type:'trained_model',method:'AMD / 白内障 / 糖网 / 正常四分类 + CAM',sample_id:'fundus-screen-idrid-67',sample_url:'/research-samples/fundus-screen-idrid-67',source_url:'https://github.com/lixiangcog/fundus-dx-ml',license:'Project model',output:'筛查概率 + CAM（非病灶掩膜）' },
+  { id:'vascular-quantification',number:'04',title:'OCTA 微血管定量',english:'OCTA VASCULAR QUANTIFICATION',default_modality:'OCTA',modalities:['OCTA'],engine:'Pretrained DynUNet · epoch 30',engine_type:'pretrained_model',method:'深度血管分割 + 骨架、分支、密度量化',sample_id:'octa-vessels-sgan-232653',sample_url:'/research-samples/octa-vessels-sgan-232653',source_url:'https://github.com/aiforvision/OCTA-autosegmentation',license:'MIT',output:'血管掩膜 + Dice / IoU + 微血管形态学' },
+  { id:'fundus-lesion-quantification',number:'05',title:'彩照病灶定位量化',english:'FUNDUS LESION QUANTIFICATION',default_modality:'眼底彩照',modalities:['眼底彩照'],engine:'U-Net · SE-ResNeXt50',engine_type:'pretrained_model',method:'棉絮斑 / 硬性渗出 / 出血 / 微动脉瘤像素分割',sample_id:'fundus-lesions-idrid-67',sample_url:'/research-samples/fundus-lesions-idrid-67',source_url:'https://github.com/ClementP/fundus-lesions-segmentation',license:'MIT',output:'四类病灶掩膜 + 面积 / 组件 / Dice / IoU' },
+  { id:'oct-fluid-quantification',number:'06',title:'OCT 液体定位量化',english:'OCT FLUID QUANTIFICATION',default_modality:'OCT',modalities:['OCT'],engine:'Duke residual U-Net · v1',engine_type:'trained_model',method:'视网膜液体像素定位、组件与面积比例量化',sample_id:'oct-fluid-duke-s01-5',sample_url:'/research-samples/oct-fluid-duke-s01-5',source_url:'https://github.com/ClinicalAI/MIRAGE',license:'Research model / CC BY 4.0 data release',output:'液体热区 + Dice / IoU / 面积 / 最大高度' },
 ];
 
 function fileName(id) { return `demo_${id.replaceAll('-','_')}.png`; }
@@ -56,7 +58,7 @@ function App() {
     } catch { setError('默认病例加载失败，请刷新页面后重试。'); }
   };
 
-  useEffect(() => { loadDefault(active); }, [activeId]);
+  useEffect(() => { loadDefault(active); }, [activeId, active?.sample_url]);
   useEffect(() => () => { if (preview?.startsWith('blob:')) URL.revokeObjectURL(preview); }, [preview]);
 
   const chooseCapability = (id) => { if (loading || id === activeId) return; setActiveId(id); };
@@ -69,6 +71,7 @@ function App() {
     if (!file || loading) return;
     setLoading(true); setResult(null); setError('');
     const data = new FormData(); data.append('file', file);
+    if (isDefault && active.sample_id) data.append('sample_id', active.sample_id);
     try {
       const response = await axios.post(`${API_URL}/analyze/${active.id}`, data);
       setResult(response.data); setService('online');
@@ -89,7 +92,7 @@ function App() {
         </nav>
         <div className="header-meta">
           <span><small>SUPPORTED MODALITY</small><b>OCT · OCTA · CFP</b></span>
-          <span><small>ANALYSIS ENGINE</small><b>{workspace === 'imaging' ? '04 PIPELINES' : 'TOOL AGENT'}</b></span>
+          <span><small>ANALYSIS ENGINE</small><b>{workspace === 'imaging' ? '06 PIPELINES' : 'TOOL AGENT'}</b></span>
           <span className={`service ${service}`}><small>SYSTEM STATUS</small><b><i /> {service === 'online' ? 'ONLINE' : service === 'offline' ? 'OFFLINE' : 'CHECKING'}</b></span>
         </div>
       </header>
@@ -97,7 +100,7 @@ function App() {
       <main>
         {workspace === 'amd' ? <AMDWorkspace apiUrl={API_URL}/> : <>
         <section className="intro-row">
-          <div><span className="eyebrow">OPHTHALMIC IMAGING WORKBENCH // V2.0</span><h1>从影像质量到微血管形态，<br /><em>一站式完成眼科影像分析。</em></h1></div>
+          <div><span className="eyebrow">OPHTHALMIC IMAGING WORKBENCH // V4.0</span><h1>从影像质量到微血管形态，<br /><em>一站式完成眼科影像分析。</em></h1></div>
           <p>支持 OCT、OCTA 与眼底彩照。每项能力均已配置默认病例、可运行引擎和来源说明，可直接开始实验。</p>
         </section>
 
@@ -150,7 +153,13 @@ function App() {
           <aside className="metrics-panel">
             <div className="panel-kicker"><Activity size={13} /> QUANTITATIVE OUTPUT</div>
             {result ? <motion.div className="result-data" initial={{opacity:0,y:5}} animate={{opacity:1,y:0}}>
-              <h3>{result.summary}</h3><div className="metric-list">{result.metrics.map((metric,index) => <div key={`${metric.label}-${index}`}><span>{metric.label}<small>{metric.detail}</small></span><strong>{metric.value}<em>{metric.unit}</em></strong></div>)}</div>
+              <h3>{result.summary}</h3>
+              {result.quality && <div className={`quality-gate ${result.quality.status}`}>
+                <span>{result.quality.status === 'passed' ? <Check size={13}/> : <CircleAlert size={13}/>}<b>{result.quality.label}</b></span>
+                <p>{result.quality.scope}</p><small>门槛：{result.quality.threshold}</small>
+                {result.quality.sample?.title && <em>{result.quality.sample.title} · {result.quality.sample.split}</em>}
+              </div>}
+              <div className="metric-list">{result.metrics.map((metric,index) => <div key={`${metric.label}-${index}`}><span>{metric.label}<small>{metric.detail}</small></span><strong>{String(metric.value)}<em>{metric.unit}</em></strong></div>)}</div>
               {result.probabilities && <div className="probability-mini">{Object.entries(result.probabilities).sort((a,b)=>b[1]-a[1]).map(([name,value]) => <div key={name}><span>{name.replaceAll('_',' ')}</span><i><b style={{width:`${value*100}%`}} /></i><strong>{(value*100).toFixed(1)}%</strong></div>)}</div>}
               <p className="result-notice"><CircleAlert size={14} />{result.notice}</p>
             </motion.div> : <div className="metric-placeholder"><div className="signal-bars">{[24,48,34,70,52,86,42,64,30,74].map((h,i)=><i key={i} style={{height:`${h}%`}} />)}</div><p>运行后将在这里显示结构化指标与模型说明。</p></div>}

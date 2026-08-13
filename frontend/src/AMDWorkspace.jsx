@@ -95,7 +95,7 @@ function AMDWorkspace({ apiUrl }) {
 
     {!result ? <section className="amd-console">
       <aside className="case-context">
-        <div className="amd-panel-head"><span><Stethoscope size={14}/> CLINICAL CASE</span><b>SYNTHETIC DEMO</b></div>
+        <div className="amd-panel-head"><span><Stethoscope size={14}/> CLINICAL CASE</span><b>PAPER CASE / DE-IDENTIFIED</b></div>
         {caseData ? <>
           <h2>{caseData.case_id}</h2>
           <p className="case-title">{caseData.title}</p>
@@ -103,23 +103,23 @@ function AMDWorkspace({ apiUrl }) {
             <div><dt>PATIENT</dt><dd>{caseData.patient.age} / {caseData.patient.sex} / {caseData.patient.eye}</dd></div>
             <div><dt>PRIOR DIAGNOSIS</dt><dd>{caseData.patient.diagnosis}</dd></div>
             <div><dt>TREATMENT</dt><dd>{caseData.treatment.agent} / {caseData.treatment.injections} injections</dd></div>
-            <div><dt>INTERVAL</dt><dd>{caseData.treatment.current_interval_weeks} weeks</dd></div>
+            <div><dt>INTERVAL</dt><dd>{caseData.treatment.current_interval_weeks}</dd></div>
           </dl>
           <p className="case-narrative">{caseData.context}</p>
         </> : <div className="case-loading"><LoaderCircle size={20}/>LOADING CASE...</div>}
-        <div className="case-safety"><ShieldAlert size={15}/><span><b>DEMO DATA NOTICE</b>Public samples form a synthetic pair and are not a real longitudinal patient record.</span></div>
+        <div className="case-safety"><ShieldAlert size={15}/><span><b>IMAGE QUALITY / REVIEW</b>Figure 3 crops are de-identified paper thumbnails (native 93×99 px). Reported biomarkers are kept separate from local model outputs.</span></div>
       </aside>
 
       <section className="visit-matrix">
         <div className="amd-panel-head"><span><ImageIcon size={14}/> MULTIMODAL TIMELINE</span><b>2 VISITS / 6 IMAGES</b></div>
         <div className="visit-grid">
           {(caseData?.visits || []).map((visit,index) => <div className="visit-column" key={visit.id}>
-            <div className="visit-title"><span>{visit.id}</span><div><b>{visit.label}</b><small>{visit.date} / BCVA {visit.bcva_logmar} logMAR</small></div></div>
+            <div className="visit-title"><span>{visit.id}</span><div><b>{visit.label}</b><small>{visit.date} / BCVA {visit.bcva_decimal} decimal</small></div></div>
             {MODALITIES.map(([key,label]) => <div className="visit-image" key={key}>
               <img src={visit.images[key]} alt={`${visit.label} ${key}`}/>
               <span>{label}</span><i/>
             </div>)}
-            {index === 0 && <div className="visit-arrow"><ArrowRight size={17}/><small>{caseData.treatment.current_interval_weeks} WEEKS</small></div>}
+            {index === 0 && <div className="visit-arrow"><ArrowRight size={17}/><small>3 MONTHS</small></div>}
           </div>)}
         </div>
       </section>
@@ -193,6 +193,18 @@ function AgentResult({ result, onReset }) {
             </div>)}
           </div>
         </section>
+
+        {result.reported_reference_biomarkers && <section className="biomarker-card reported-biomarkers">
+          <div className="amd-panel-head"><span><BookOpen size={14}/> PAPER-REPORTED REFERENCE</span><b>NOT LOCALLY RECOMPUTED</b></div>
+          <div className="reported-grid">
+            <article><small>BCVA / DECIMAL</small><strong>{result.reported_reference_biomarkers.bcva_decimal[0]} → {result.reported_reference_biomarkers.bcva_decimal[1]}</strong></article>
+            <article><small>OCT LESION AREA</small><strong>{result.reported_reference_biomarkers.oct.candidate_lesion_area_mm2[0]} → {result.reported_reference_biomarkers.oct.candidate_lesion_area_mm2[1]} mm²</strong></article>
+            <article><small>OCT MAX HEIGHT</small><strong>{result.reported_reference_biomarkers.oct.maximum_lesion_height_um[0]} → {result.reported_reference_biomarkers.oct.maximum_lesion_height_um[1]} μm</strong></article>
+            <article><small>OCTA CNV AREA</small><strong>{result.reported_reference_biomarkers.octa.cnv_candidate_area_mm2[0]} → {result.reported_reference_biomarkers.octa.cnv_candidate_area_mm2[1]} mm²</strong></article>
+            <article><small>FUNDUS LESION AREA</small><strong>{result.reported_reference_biomarkers.fundus.candidate_lesion_area_mm2[0]} → {result.reported_reference_biomarkers.fundus.candidate_lesion_area_mm2[1]} mm²</strong></article>
+          </div>
+          <p className="quality-warning"><AlertTriangle size={13}/>{result.case_quality?.label} · {result.case_quality?.reason}</p>
+        </section>}
 
         <section className="options-card">
           <div className="amd-panel-head"><span><Waypoints size={14}/> ALL CANDIDATE OPTIONS</span><b>CONSTRAINED EVALUATION</b></div>

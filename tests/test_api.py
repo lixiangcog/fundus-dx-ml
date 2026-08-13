@@ -67,6 +67,44 @@ def test_predict_rejects_non_image_content_type():
     assert response.status_code == 400
 
 
+
+
+def test_v4_catalog_exposes_six_calibrated_pipelines():
+    response = client.get("/capabilities")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["version"] == "4.0.0"
+    assert len(body["capabilities"]) == 6
+    assert {item["id"] for item in body["capabilities"]} >= {
+        "fundus-lesion-quantification", "oct-fluid-quantification",
+        "vascular-quantification", "structure-segmentation",
+    }
+    assert all(item.get("sample_id") for item in body["capabilities"])
+
+
+def test_research_sample_disables_browser_cache():
+    response = client.get("/research-samples/oct-enhancement-duke-s03-4")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store, max-age=0"
+
+
+def test_default_fundus_case_uses_disclosed_four_class_selection():
+    response = client.get("/capabilities")
+    catalog = {item["id"]: item for item in response.json()["capabilities"]}
+    assert catalog["disease-screening"]["sample_id"] == "fundus-screen-idrid-67"
+    assert catalog["fundus-lesion-quantification"]["sample_id"] == "fundus-lesions-idrid-67"
+
+
+def test_mismatched_sample_id_cannot_apply_reference_truth():
+    response = client.post(
+        "/analyze/quality-enhancement",
+        data={"sample_id": "oct-enhancement-duke-s03-4"},
+        files={"file": ("different.png", synthetic_image_bytes(), "image/png")},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["input"]["reference_applied"] is False
+    assert body["quality"]["status"] == "unverified"
 def test_predict_rejects_corrupt_image():
     response = client.post(
         "/predict",
@@ -91,3 +129,9 @@ def test_amd_config_declares_dual_specialist_runtime():
     assert body["research_only"] is True
     assert body["service"]["model"] == "Qwen2.5-VL-3B-Instruct + VisionUnite V1"
     assert len(body["required_images"]) == 6
+    case = body["default_case"]
+    assert case["case_id"] == "CASE_001"
+    assert case["evidence_origin"] == "reported_reference"
+    assert case["visits"][0]["bcva_decimal"] == 0.3
+    assert case["visits"][1]["bcva_decimal"] == 0.5
+    assert case["image_quality"]["status"] == "review"

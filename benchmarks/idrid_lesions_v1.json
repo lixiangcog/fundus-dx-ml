@@ -1,0 +1,27 @@
+{
+  "version": "idrid-lesions-v1",
+  "model": "ClementP U-Net / SE-ResNeXt50",
+  "dataset": "IDRiD standard segmentation test split",
+  "selection_rule": "Among cases with all four lesion annotations, choose the case maximizing the minimum per-class Dice.",
+  "test": {
+    "images": 27,
+    "case_macro_mean": 0.5146336013,
+    "class_mean_positive_cases": {
+      "CTW": 0.4795373628,
+      "EX": 0.6438256870,
+      "HE": 0.5450509028,
+      "MA": 0.3829336008
+    }
+  },
+  "default_sample": {
+    "id": "IDRiD_67",
+    "macro_dice": 0.6170709514,
+    "minimum_class_dice": 0.4855852727,
+    "per_class_dice": {
+      "CTW": 0.6030454493,
+      "EX": 0.6265709156,
+      "HE": 0.7530821682,
+      "MA": 0.4855852727
+    }
+  }
+}

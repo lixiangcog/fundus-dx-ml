@@ -20,4 +20,4 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export HF_HOME=/data/user/hd66945/.cache/huggingface
 
 cd /data/user/hd66945/fundus-dx-ml
-exec /data/user/hd66945/.conda/envs/visionunite/bin/python -m uvicorn services.visionunite_server:app --host 0.0.0.0 --port "${VISIONUNITE_PORT}"
+exec /data/user/hd66945/.venvs/retina-imaging/bin/python -m uvicorn services.visionunite_server:app --host 0.0.0.0 --port "${VISIONUNITE_PORT}"

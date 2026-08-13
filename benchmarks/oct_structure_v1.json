@@ -1,0 +1,31 @@
+{
+  "model": "MONAI 2D residual U-Net",
+  "seed": 20260814,
+  "development_subjects": [6, 7, 8, 9],
+  "selection_subjects": [10],
+  "independent_test_subjects": [1, 2, 3, 4, 5],
+  "train_images": 33,
+  "validation_images": 11,
+  "test_images": 55,
+  "best_epoch": 36,
+  "validation": {
+    "mean_layer_dice": 0.8470234268754188,
+    "fluid_dice": 0.6934588713120369
+  },
+  "test": {
+    "mean_dice_excluding_background": 0.8110263153037137,
+    "mean_layer_dice": 0.8274504399692746,
+    "fluid_dice": 0.6796333179792272,
+    "per_class_dice": {
+      "ILM": 0.800311956421924,
+      "NFL": 0.8700272026931916,
+      "IPL": 0.7192736196687923,
+      "INL": 0.7036189070945917,
+      "OPL": 0.8551044746835305,
+      "ISM": 0.8432360564207456,
+      "OS": 0.83435199135799,
+      "BM": 0.9936793114134315,
+      "Fluid": 0.6796333179792272
+    }
+  }
+}

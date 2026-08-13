@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import torch
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageChops, UnidentifiedImageError
 import io
 import sys
 import os
@@ -18,11 +18,13 @@ import uvicorn
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from shared import CLASS_NAMES, get_device, get_inference_transform, build_resnet18
-from api.pipelines import CAPABILITIES, PIPELINES, PIPELINE_INDEX
+from api.pipelines_v3 import CAPABILITIES, PIPELINES, PIPELINE_INDEX
+from api.imaging_client import status as imaging_status
+from api.samples import get_pipeline_reference, get_sample, public_catalog
 from api.amd_agent import DEFAULT_CASE, public_status as amd_agent_status
 from api.amd_agent import run_case as run_amd_case, run_default_case as run_default_amd_case
 
-APP_VERSION = "3.1.0"
+APP_VERSION = "4.0.0"
 MAX_UPLOAD_BYTES = 12 * 1024 * 1024
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
@@ -63,13 +65,22 @@ async def read_image(file: UploadFile) -> Image.Image:
 @app.get("/health")
 async def health():
     return {"status": "ok", "model_loaded": model is not None, "device": str(device),
-            "version": APP_VERSION, "pipelines_ready": len(PIPELINES)}
+            "version": APP_VERSION, "pipelines_ready": len(PIPELINES),
+            "imaging_service": imaging_status()}
 
 
 @app.get("/capabilities")
 async def capabilities():
     return {"modalities": ["OCT", "OCTA", "眼底彩照"], "capabilities": CAPABILITIES,
-            "research_only": True, "version": APP_VERSION}
+            "samples": public_catalog(), "research_only": True, "version": APP_VERSION}
+
+
+@app.get("/research-samples/{sample_id}")
+async def research_sample(sample_id: str):
+    sample = get_sample(sample_id)
+    if not sample or not sample["path"].is_file():
+        raise HTTPException(status_code=404, detail="研究样本不存在")
+    return FileResponse(sample["path"], headers={"Cache-Control":"no-store, max-age=0"})
 
 
 @app.get("/model-info")
@@ -80,17 +91,30 @@ async def model_info():
 
 
 @app.post("/analyze/{pipeline_id}")
-async def analyze(pipeline_id: str, file: UploadFile = File(...)):
+async def analyze(pipeline_id: str, file: UploadFile = File(...), sample_id: str | None = Form(None)):
     if pipeline_id not in PIPELINES:
         raise HTTPException(status_code=404, detail="未知分析功能")
     image = await read_image(file)
+    upload_dir = PROJECT_ROOT / "runtime/imaging_uploads"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    image_path = upload_dir / f"{uuid.uuid4().hex}.png"
+    image.save(image_path, format="PNG")
+    reference = get_pipeline_reference(sample_id, pipeline_id)
+    if reference:
+        registered = Image.open(reference["path"]).convert("RGB")
+        if registered.size != image.size or ImageChops.difference(registered, image).getbbox() is not None:
+            reference = None
     try:
         result = PIPELINES[pipeline_id](image=image, model=model, transform=transform,
-                                        class_names=class_names)
+                                        class_names=class_names, image_path=image_path, reference=reference)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
+    finally:
+        image_path.unlink(missing_ok=True)
     return {"pipeline": PIPELINE_INDEX[pipeline_id], "input": {"filename": file.filename,
-            "width": image.width, "height": image.height}, **result, "model_version": APP_VERSION}
+            "width": image.width, "height": image.height, "sample_id": sample_id,
+            "reference_applied": reference is not None}, **result, "model_version": APP_VERSION,
+            "real_inference": True}
 
 
 @app.post("/predict")

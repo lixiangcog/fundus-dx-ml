@@ -4,14 +4,16 @@ This project is a research and teaching workbench. It is not a medical device.
 Every integrated pipeline declares whether it is a trained model or a reference
 algorithm in the API and UI.
 
-## ReLayNet OCT structure segmentation
+## Duke OCT structure and fluid segmentation
 
-- Repository: https://github.com/ai-med/relaynet_pytorch
-- Pinned commit: `40ae1aa56e426da14ddca37e06c2f31966febea5`
-- License: MIT (copied to `third_party/relaynet_pytorch/LICENSE`)
-- Integrated artifact: `models/Exp01/relaynet_epoch20.model`
-- Note: historical checkpoint compatibility shims are applied at load time.
-  Cross-device use requires independent validation and calibration.
+- Data/source: https://github.com/ClinicalAI/MIRAGE (CC BY 4.0 release metadata)
+- Integrated artifact: locally trained MONAI residual U-Net at
+  `models/oct-structure/duke_unet_v1.pth`.
+- Split: subjects 6-9 development, subject 10 checkpoint selection, subjects
+  1-5 independent test. Results are recorded in
+  `benchmarks/oct_structure_v1.json` and `CALIBRATION_REPORT_V4.md`.
+- The released ReLayNet epoch-20 checkpoint was evaluated and rejected for this
+  deployment because it did not meet the local Duke quality gate.
 
 ## FundusDx lesion recognition
 
@@ -26,24 +28,29 @@ algorithm in the API and UI.
 - OCTA autosegmentation domain/sample source:
   https://github.com/aiforvision/OCTA-autosegmentation (MIT), pinned commit
   `9cdc3137b6f55ae766dcae76c166ccf9774daf2b`
-- Current deployable engine: CPU multiscale Hessian vessel response, connected
-  component cleanup, morphological skeletonization, and morphometry.
+- Current deployable engine: upstream epoch-30 DynUNet checkpoint on the GPU,
+  followed by connected-component cleanup, skeletonization and morphometry.
+- The central avascular candidate is explicitly a geometry-derived visual aid,
+  not an independently validated FAZ segmentation.
 - Note: measurements are in pixels. Physical units require device pixel spacing,
   layer/slab metadata and clinical quality control.
 
 ## Quality enhancement reference
 
 - OpenCV: https://github.com/opencv/opencv (Apache-2.0)
-- Current deployable engine: CLAHE, non-local means denoising and conservative
-  unsharp masking.
+- Current deployable engine: calibrated non-local means denoising. Its fixed
+  synthetic-noise example is checked with paired PSNR and SSIM gains.
 - Note: the algorithm cannot recreate tissue information lost during acquisition.
 
-## Default examples
+## Fundus lesion localization and default examples
 
-- OCT B-scan: `Traslational-Visual-Health-Laboratory/OCT-AND-EYE-FUNDUS-DATASET`,
-  file `OCT/OCT1/1221_OD_o_2.jpg`; see the repository dataset citation and terms.
-- OCTA image: `aiforvision/OCTA-autosegmentation`, MIT, pinned commit above.
-- Fundus photograph: existing project teaching sample.
+- Model: https://huggingface.co/ClementP/fundus-lesions-segmentation-unet_seresnext50_32x4d
+  (MIT), U-Net with SE-ResNeXt50 encoder.
+- Full 27-image standard IDRiD test-set measurements and the disclosed default
+  case selection rule are stored in `benchmarks/idrid_lesions_v1.json`.
+- The fixed fundus example is IDRiD_67 (CC BY 4.0); the fixed OCT examples are
+  independent-test Duke subjects; the OCTA example is an upstream paired
+  integration reference. See `CALIBRATION_REPORT_V4.md` for evidence levels.
 
 ## VisionUnite V1 fundus specialist
 

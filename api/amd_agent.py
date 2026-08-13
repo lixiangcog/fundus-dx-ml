@@ -7,6 +7,7 @@ has been evaluated against retrieved evidence.
 from __future__ import annotations
 
 import json
+import hashlib
 import math
 import os
 import re
@@ -22,7 +23,7 @@ from typing import Any, Iterable
 
 from PIL import Image
 
-from api.pipelines import lesion_recognition, structure_segmentation, vascular_quantification
+from api.pipelines_v3 import disease_screening, structure_segmentation, vascular_quantification
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -34,26 +35,35 @@ NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 TOKEN_FILE = RUNTIME_DIR / "agent_token"
 EVIDENCE_FILE = PROJECT_ROOT / "data" / "amd_evidence.json"
 DEFAULT_IMAGES = {
-    "baseline_oct": PROJECT_ROOT / "frontend/public/samples/ophthalmic/oct_structure.png",
-    "baseline_octa": PROJECT_ROOT / "frontend/public/samples/ophthalmic/octa_vascular.png",
-    "baseline_fundus": PROJECT_ROOT / "frontend/public/samples/ophthalmic/fundus_lesion.jpg",
-    "followup_oct": PROJECT_ROOT / "frontend/public/samples/ophthalmic/oct_structure.png",
-    "followup_octa": PROJECT_ROOT / "frontend/public/samples/ophthalmic/octa_vascular.png",
-    "followup_fundus": PROJECT_ROOT / "frontend/public/samples/ophthalmic/fundus_lesion.jpg",
+    "baseline_oct": PROJECT_ROOT / "runtime/research_samples/amd_v0_oct.png",
+    "baseline_octa": PROJECT_ROOT / "runtime/research_samples/amd_v0_octa.png",
+    "baseline_fundus": PROJECT_ROOT / "runtime/research_samples/amd_v0_fundus.png",
+    "followup_oct": PROJECT_ROOT / "runtime/research_samples/amd_v1_oct.png",
+    "followup_octa": PROJECT_ROOT / "runtime/research_samples/amd_v1_octa.png",
+    "followup_fundus": PROJECT_ROOT / "runtime/research_samples/amd_v1_fundus.png",
 }
 DEFAULT_CASE = {
-    "case_id": "AMD-DEMO-001",
-    "title": "合成教学纵向病例",
+    "case_id": "CASE_001",
+    "title": "论文 Figure 3 去标识纵向 nAMD 病例",
     "research_demo": True,
-    "patient": {"age": 72, "sex": "女", "eye": "右眼", "diagnosis": "新生血管性 AMD（既往临床诊断）"},
-    "treatment": {"agent": "阿柏西普", "injections": 5, "current_interval_weeks": 8},
+    "evidence_origin": "reported_reference",
+    "patient": {"age": 78, "sex": "女", "eye": "右眼", "diagnosis": "新生血管性 AMD（论文既往诊断）"},
+    "treatment": {"agent": "玻璃体腔抗 VEGF（具体药物未报告）", "injections": 5, "current_interval_weeks": "论文未报告"},
     "visits": [
-        {"id": "V0", "label": "基线", "date": "2025-03-10", "bcva_logmar": 0.40,
-         "images": {"oct": "/samples/ophthalmic/oct_structure.png", "octa": "/samples/ophthalmic/octa_vascular.png", "fundus": "/samples/ophthalmic/fundus_lesion.jpg"}},
-        {"id": "V1", "label": "随访", "date": "2025-05-05", "bcva_logmar": 0.36,
-         "images": {"oct": "/samples/ophthalmic/oct_structure.png", "octa": "/samples/ophthalmic/octa_vascular.png", "fundus": "/samples/ophthalmic/fundus_lesion.jpg"}},
+        {"id":"V0","label":"基线","date":"2024-03","bcva_decimal":0.3,
+         "images":{"oct":"/research-samples/amd-v0-oct","octa":"/research-samples/amd-v0-octa","fundus":"/research-samples/amd-v0-fundus"}},
+        {"id":"V1","label":"随访","date":"2024-06","bcva_decimal":0.5,
+         "images":{"oct":"/research-samples/amd-v1-oct","octa":"/research-samples/amd-v1-octa","fundus":"/research-samples/amd-v1-fundus"}},
     ],
-    "context": "完成 3 次负荷治疗后进入 8 周间隔治疗；本次无新发视物变形或中心暗点。默认影像为公开样例组成的合成教学配对，并非同一真实患者的纵向资料。",
+    "context": "论文报告：78 岁女性右眼 nAMD，接受 5 次抗 VEGF 注射；2024-03 至 2024-06 视力与多模态影像标志物总体改善。",
+    "reference_biomarkers": {
+        "provenance":"paper_reported_not_locally_recomputed",
+        "oct":{"candidate_lesion_area_mm2":[2.38,1.28],"maximum_lesion_height_um":[413.4,354.9]},
+        "fundus":{"candidate_lesion_area_mm2":[8.58,6.58],"followup_relative_to_baseline_percent":76.7},
+        "octa":{"cnv_candidate_area_mm2":[1.39,0.08],"followup_relative_to_baseline_percent":5.7},
+        "bcva_decimal":[0.3,0.5]
+    },
+    "image_quality": {"source":"paper_figure_crop","native_pixels":[93,99],"display_pixels":[564,594],"status":"review","reason":"论文图示缩略图被放大，仅用于工作流复现；不等同于原始 DICOM/OCT 体数据。"}
 }
 
 
@@ -194,9 +204,9 @@ def _metric_value(result: dict, label: str, default: float = 0.0) -> float:
 def _run_tools(paths: dict[str, Path], model, transform, class_names) -> dict[str, Any]:
     visits = {}
     for visit in ("baseline", "followup"):
-        oct_result = structure_segmentation(Image.open(paths[f"{visit}_oct"]).convert("RGB"))
-        octa_result = vascular_quantification(Image.open(paths[f"{visit}_octa"]).convert("RGB"))
-        fundus_result = lesion_recognition(
+        oct_result = structure_segmentation(Image.open(paths[f"{visit}_oct"]).convert("RGB"), image_path=paths[f"{visit}_oct"])
+        octa_result = vascular_quantification(Image.open(paths[f"{visit}_octa"]).convert("RGB"), image_path=paths[f"{visit}_octa"])
+        fundus_result = disease_screening(
             Image.open(paths[f"{visit}_fundus"]).convert("RGB"),
             model=model,
             transform=transform,
@@ -274,23 +284,42 @@ def _contains_any(text: str, terms: Iterable[str]) -> bool:
 
 def _evaluate_options(case: dict, tools: dict, vision: dict, specialist: dict, evidence: list[dict]) -> tuple[list[dict], dict]:
     visits = case["visits"]
-    vision_delta = float(visits[1]["bcva_logmar"]) - float(visits[0]["bcva_logmar"])
+    if "bcva_decimal" in visits[0]:
+        vision_delta = float(visits[1]["bcva_decimal"]) - float(visits[0]["bcva_decimal"])
+        vision_unit = "decimal_acuity"
+        vision_worse = vision_delta <= -0.1
+    else:
+        vision_delta = float(visits[1]["bcva_logmar"]) - float(visits[0]["bcva_logmar"])
+        vision_unit = "logmar"
+        vision_worse = vision_delta >= 0.1
     deltas = tools["deltas"]
+    reported = case.get("reference_biomarkers")
+    reported_deltas = {}
+    if reported:
+        for key, values in (("oct_lesion_area",reported["oct"]["candidate_lesion_area_mm2"]),("octa_cnv_area",reported["octa"]["cnv_candidate_area_mm2"]),("fundus_lesion_area",reported["fundus"]["candidate_lesion_area_mm2"])):
+            reported_deltas[key+"_percent"] = round((values[1]-values[0])/max(values[0],1e-6)*100,2)
     vision_text = json.dumps({"generalist": vision, "fundus_specialist": specialist}, ensure_ascii=False)
     active_visual = _contains_any(vision_text, ["new fluid", "increased fluid", "新发液体", "液体增加", "new hemorrhage", "新出血", "worsening"])
     uncertain = "raw_text" in vision or _contains_any(vision_text, ["uncertain", "无法", "cannot determine", "质量不足"])
-    objective_activity = vision_delta >= 0.1 or deltas["oct_thickness_proxy_percent"] > 10 or deltas["amd_probability_points"] > 15
-    active = objective_activity or active_visual
-    stable = not active and abs(vision_delta) < 0.1 and abs(deltas["oct_thickness_proxy_percent"]) <= 10
+    if reported:
+        objective_activity = vision_worse or any(value > 10 for value in reported_deltas.values())
+        active = objective_activity
+        stable = not active and vision_delta >= 0 and all(value <= 0 for value in reported_deltas.values())
+        uncertain_for_selection = False
+    else:
+        objective_activity = vision_worse or deltas["oct_thickness_proxy_percent"] > 10 or deltas["amd_probability_points"] > 15
+        active = objective_activity or active_visual
+        stable = not active and not vision_worse and abs(deltas["oct_thickness_proxy_percent"]) <= 10
+        uncertain_for_selection = uncertain
     injections = int(case["treatment"].get("injections", 0))
     evidence_ids = [item["id"] for item in evidence]
 
     specs = [
-        ("continue_monitor", "继续当前方案并密切监测", 76 if stable else 58, ["E1", "E2", "E6"]),
+        ("continue_monitor", "继续当前方案并密切监测", 84 if stable else 58, ["E1", "E2", "E6"]),
         ("shorten_interval", "缩短抗 VEGF 治疗间隔", 86 if active else 32, ["E2", "E3", "E4"]),
-        ("extend_interval", "仅在确认无活动时逐步延长间隔", 70 if stable and not uncertain else 25, ["E2", "E4"]),
+        ("extend_interval", "仅在确认无活动时逐步延长间隔", 70 if stable and not uncertain_for_selection else 25, ["E2", "E4"]),
         ("switch_agent", "复核诊断后考虑更换抗 VEGF 药物", 64 if active and injections >= 6 else 24, ["E1", "E3", "E5"]),
-        ("reimage_expert_review", "短期同协议复查并由视网膜专科复核", 82 if uncertain else 48, ["E3", "E5", "E6"]),
+        ("reimage_expert_review", "短期同协议复查并由视网膜专科复核", 72 if uncertain else 48, ["E3", "E5", "E6"]),
     ]
     options = []
     for option_id, title, score, citations in specs:
@@ -306,7 +335,10 @@ def _evaluate_options(case: dict, tools: dict, vision: dict, specialist: dict, e
     options.sort(key=lambda item: item["score"], reverse=True)
     state = {
         "activity": "suspected_active" if active else "apparently_stable" if stable else "uncertain",
-        "vision_delta_logmar": round(vision_delta, 3),
+        "visual_acuity_change": round(vision_delta, 3),
+        "visual_acuity_unit": vision_unit,
+        "reported_biomarker_deltas": reported_deltas,
+        "decision_measurement_source": "paper_reported_reference" if reported else "locally_computed_tools",
         "objective_activity_trigger": objective_activity,
         "visual_activity_signal": active_visual,
         "uncertainty_trigger": uncertain,
@@ -319,7 +351,8 @@ def _vision_prompt(case: dict, tool_results: dict) -> str:
     return f"""You are an ophthalmic imaging assistant. Compare six images in this exact order:
 1 baseline OCT; 2 baseline OCTA; 3 baseline color fundus; 4 follow-up OCT; 5 follow-up OCTA; 6 follow-up color fundus.
 Case context: {json.dumps(case, ensure_ascii=False)}
-Independent quantitative deltas: {json.dumps(tool_results["deltas"], ensure_ascii=False)}
+Locally computed auxiliary deltas (not the paper reference biomarkers): {json.dumps(tool_results["deltas"], ensure_ascii=False)}
+Paper-reported reference biomarkers, when present: {json.dumps(case.get("reference_biomarkers"), ensure_ascii=False)}
 Describe only visible findings. Do not claim a clinical diagnosis and do not invent tests that are not shown.
 Compare retinal morphology and possible fluid-like spaces on OCT, macular flow network on OCTA, fundus macular appearance or hemorrhage cues, longitudinal change, and image quality.
 Return JSON only. All string values must be Simplified Chinese:
@@ -338,7 +371,7 @@ def _report_prompt(case: dict, tools: dict, vision: dict, specialist: dict, opti
     return f"""You are a retinal clinical decision-support assistant. A deterministic rule engine has already selected the action; do not replace it.
 Selected action: {chosen["title"]}; disease state: {state["activity"]}.
 Case: {json.dumps(case, ensure_ascii=False)}
-Quantitative tool deltas: {json.dumps(tools["deltas"], ensure_ascii=False)}
+Locally computed auxiliary tool deltas: {json.dumps(tools["deltas"], ensure_ascii=False)}
 Cross-modal Qwen observations: {json.dumps(vision, ensure_ascii=False)}
 VisionUnite fundus specialist observations: {json.dumps(specialist, ensure_ascii=False)}
 Candidate evaluations: {json.dumps(options, ensure_ascii=False)}
@@ -380,6 +413,20 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
         target = case_path / f"{key}.png"
         Image.open(source).convert("RGB").save(target, format="PNG", optimize=True)
         saved_paths[key] = target
+
+    hashes = {key:hashlib.sha256(path.read_bytes()).hexdigest() for key,path in saved_paths.items()}
+    dimensions = {key:list(Image.open(path).size) for key,path in saved_paths.items()}
+    image_meta = case.get("image_quality", {})
+    native = image_meta.get("native_pixels")
+    distinct = len(set(hashes.values())) == len(hashes)
+    quality_status = "review" if native and min(native) < 224 else "passed"
+    case_quality = {
+        "status": quality_status,
+        "label": "论文图示缩略图需人工复核" if quality_status == "review" else "输入质量门槛通过",
+        "checks": {"six_distinct_images":distinct,"modalities_complete":len(saved_paths)==6,"decoded_dimensions":dimensions,"source_native_pixels":native},
+        "reason": image_meta.get("reason", ""),
+        "decision_measurements": "paper_reported_reference" if case.get("reference_biomarkers") else "locally_computed_tools",
+    }
 
     trace = []
     step_started = time.perf_counter()
@@ -431,6 +478,8 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
         "run_id": run_id,
         "model_report_draft": model_report_draft,
         "case": case,
+        "case_quality": case_quality,
+        "reported_reference_biomarkers": case.get("reference_biomarkers"),
         "clinical_state": state,
         "tool_results": tools,
         "vision_reasoning": vision,
@@ -453,10 +502,10 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
             "report_model": report_result["model"],
             "real_mllm_inference": True,
             "fallback_generation": False,
-            "quantitative_tools": ["ReLayNet", "multi-scale vesselness morphometry", "FundusDx ResNet18"],
+            "quantitative_tools": ["Duke residual U-Net", "OCTA DynUNet", "FundusDx ResNet18"],
             "evidence_retrieval": "BM25 over curated guideline evidence cards",
         },
         "runtime_ms": round((time.perf_counter() - started) * 1000, 1),
-        "notice": "科研与教学用途；默认病例为合成样例。任何临床行动必须由有资质的眼科医生结合原始影像、完整病史与设备标定结果确认。",
+        "notice": "科研与教学用途；默认病例来自论文 Figure 3 的去标识图示。论文报告数值与本地模型输出分开保存；任何临床行动必须由有资质的眼科医生结合原始影像确认。",
     }
 
