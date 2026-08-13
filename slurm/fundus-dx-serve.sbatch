@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=fundus-dx
 #SBATCH --partition=Intel-8358
+#SBATCH --nodelist=node10
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4

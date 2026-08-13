@@ -1,0 +1,56 @@
+[
+  {
+    "id": "E1",
+    "title": "NICE NG82: Age-related macular degeneration recommendations",
+    "year": 2018,
+    "source": "National Institute for Health and Care Excellence",
+    "url": "https://www.nice.org.uk/guidance/ng82/chapter/Recommendations",
+    "tags": ["nAMD", "anti-VEGF", "switch", "stable", "monitoring"],
+    "evidence": "For wet active AMD, anti-VEGF treatment is standard. Switching may be considered for practical reasons, but added clinical benefit can be limited. Observation can be considered when disease appears stable, with monitoring and patient involvement in decisions."
+  },
+  {
+    "id": "E2",
+    "title": "APVRS consensus on treat-and-extend regimens for nAMD and PCV",
+    "year": 2021,
+    "source": "Asia-Pacific Vitreo-retina Society consensus",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8673847/",
+    "tags": ["nAMD", "treat-and-extend", "IRF", "SRF", "interval", "recurrence"],
+    "evidence": "After loading treatment, intervals may be extended stepwise when disease is inactive. When activity recurs, reinject and shorten by 2 to 4 weeks until fluid resolves. Intraretinal fluid should be treated; small persistent subretinal fluid may sometimes be tolerated when vision and other activity markers remain stable."
+  },
+  {
+    "id": "E3",
+    "title": "Fluid biomarkers in neovascular AMD management",
+    "year": 2021,
+    "source": "European expert consensus and literature review",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8302650/",
+    "tags": ["nAMD", "OCT", "fluid", "IRF", "SRF", "PED", "hemorrhage", "switch"],
+    "evidence": "New or persistent intraretinal fluid, new or increased subretinal fluid, increasing pigment epithelial detachment, new hemorrhage, or subretinal hyperreflective material can indicate activity and support reducing the interval. With repeated poor response, re-check diagnosis using additional imaging before considering a switch."
+  },
+  {
+    "id": "E4",
+    "title": "Taiwan expert consensus for nAMD treat-and-extend",
+    "year": 2022,
+    "source": "Taiwan retina expert consensus",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8760882/",
+    "tags": ["nAMD", "BCVA", "dry retina", "interval", "hemorrhage", "neovascularization"],
+    "evidence": "Extension candidates have stable vision and a dry retina without hemorrhage or new neovascularization. Increased fluid with clinically meaningful vision loss, new macular hemorrhage, or new neovascularization supports shortening treatment intervals."
+  },
+  {
+    "id": "E5",
+    "title": "Updated UK q4-q16 aflibercept treat-and-extend guidance",
+    "year": 2022,
+    "source": "UK retinal specialist panel",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9542445/",
+    "tags": ["aflibercept", "nAMD", "treat-and-extend", "OCT", "PCV", "ICGA", "poor response"],
+    "evidence": "Interval reduction is considered for visual loss related to activity or OCT evidence of new or increased fluid, hemorrhage, or subretinal hyperreflective material. Poor response after initiation should prompt consideration of fluorescein or indocyanine green angiography to assess PCV and alternative pathology."
+  },
+  {
+    "id": "E6",
+    "title": "EURETINA guideline for neovascular AMD",
+    "year": 2014,
+    "source": "European Society of Retina Specialists",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4145443/",
+    "tags": ["nAMD", "EURETINA", "anti-VEGF", "OCT", "monitoring"],
+    "evidence": "Anti-VEGF management should be guided by visual function and retinal morphology, with OCT central to monitoring. Flexible and treat-and-extend approaches require repeated assessment for leakage or exudative activity."
+  }
+]

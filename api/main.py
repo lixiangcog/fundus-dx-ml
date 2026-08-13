@@ -1,4 +1,9 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+import asyncio
+import json
+import shutil
+import uuid
+
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -14,8 +19,10 @@ import uvicorn
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from shared import CLASS_NAMES, get_device, get_inference_transform, build_resnet18
 from api.pipelines import CAPABILITIES, PIPELINES, PIPELINE_INDEX
+from api.amd_agent import DEFAULT_CASE, public_status as amd_agent_status
+from api.amd_agent import run_case as run_amd_case, run_default_case as run_default_amd_case
 
-APP_VERSION = "2.0.0"
+APP_VERSION = "3.0.0"
 MAX_UPLOAD_BYTES = 12 * 1024 * 1024
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
@@ -97,6 +104,64 @@ async def predict(file: UploadFile = File(...)):
     return {"prediction": class_names[index], "confidence": float(probabilities[index]),
             "probabilities": {class_names[i]: float(probabilities[i]) for i in range(len(class_names))},
             "inference_ms": round((time.perf_counter()-started)*1000, 1), "model_version": APP_VERSION}
+
+
+@app.get("/amd-agent/config")
+async def amd_config():
+    return {
+        "name": "Longitudinal AMD Evidence Agent",
+        "default_case": DEFAULT_CASE,
+        "service": amd_agent_status(),
+        "required_images": ["baseline_oct", "baseline_octa", "baseline_fundus",
+                            "followup_oct", "followup_octa", "followup_fundus"],
+        "research_only": True,
+    }
+
+
+@app.get("/amd-agent/status")
+async def amd_status():
+    return amd_agent_status()
+
+
+@app.post("/amd-agent/analyze-default")
+async def analyze_default_amd():
+    try:
+        return await asyncio.to_thread(run_default_amd_case, model, transform, class_names)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+
+@app.post("/amd-agent/analyze")
+async def analyze_amd(
+    case_json: str = Form(...),
+    baseline_oct: UploadFile = File(...), baseline_octa: UploadFile = File(...),
+    baseline_fundus: UploadFile = File(...), followup_oct: UploadFile = File(...),
+    followup_octa: UploadFile = File(...), followup_fundus: UploadFile = File(...),
+):
+    try:
+        case = json.loads(case_json)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail=f"?? JSON ????: {exc.msg}")
+    upload_dir = PROJECT_ROOT / "runtime" / "amd_uploads" / uuid.uuid4().hex
+    upload_dir.mkdir(parents=True, exist_ok=False)
+    uploads = {
+        "baseline_oct": baseline_oct, "baseline_octa": baseline_octa,
+        "baseline_fundus": baseline_fundus, "followup_oct": followup_oct,
+        "followup_octa": followup_octa, "followup_fundus": followup_fundus,
+    }
+    paths = {}
+    try:
+        for key, upload in uploads.items():
+            image = await read_image(upload)
+            path = upload_dir / f"{key}.png"
+            image.save(path, format="PNG")
+            paths[key] = path
+        return await asyncio.to_thread(run_amd_case, case, paths, model, transform, class_names)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    finally:
+        shutil.rmtree(upload_dir, ignore_errors=True)
+
 
 
 @app.get("/", response_class=HTMLResponse)

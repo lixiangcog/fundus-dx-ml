@@ -10,7 +10,9 @@ __pycache__/
 venv/
 
 # Large datasets and temporary image folders
-data/
+data/*
+!data/
+!data/amd_evidence.json
 AMD temp/
 DR images temp/
 
@@ -37,4 +39,8 @@ logs/
 
 # Claude Code
 CLAUDE.md
+
+# Runtime service discovery, tokens and transient cases
+runtime/
+
 .claude

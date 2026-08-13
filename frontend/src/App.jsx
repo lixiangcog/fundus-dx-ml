@@ -6,6 +6,7 @@ import {
   FileImage, Github, ImagePlus, Layers3, LoaderCircle, Microscope,
   Network, Play, RotateCcw, ScanLine, ShieldAlert, Sparkles, UploadCloud,
 } from 'lucide-react';
+import AMDWorkspace from './AMDWorkspace';
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000' : window.location.origin);
 const MAX_FILE_SIZE = 12 * 1024 * 1024;
@@ -21,6 +22,7 @@ function fileName(id) { return `demo_${id.replaceAll('-','_')}.png`; }
 function engineType(type) { return type === 'pretrained_model' ? '预训练模型' : type === 'trained_model' ? '项目模型' : '实时算法'; }
 
 function App() {
+  const [workspace, setWorkspace] = useState('imaging');
   const [capabilities, setCapabilities] = useState(FALLBACK);
   const [activeId, setActiveId] = useState('quality-enhancement');
   const [file, setFile] = useState(null);
@@ -81,14 +83,19 @@ function App() {
       <div className="ambient-grid" aria-hidden="true"><i /><i /><i /><span /></div>
       <header className="topbar">
         <div className="brand"><span className="brand-mark"><Microscope size={20} /></span><div><strong>RETINA<strong className="accent">SCOPE</strong></strong><small>多模态眼科影像智能分析平台</small></div></div>
+        <nav className="workspace-switch">
+          <button className={workspace === 'imaging' ? 'active' : ''} onClick={() => setWorkspace('imaging')}>{'\u5f71\u50cf\u5206\u6790'}<small>IMAGING LAB</small></button>
+          <button className={workspace === 'amd' ? 'active' : ''} onClick={() => setWorkspace('amd')}>{'\u7eb5\u5411 AMD Agent'}<small>CLINICAL FOLLOW-UP</small></button>
+        </nav>
         <div className="header-meta">
           <span><small>SUPPORTED MODALITY</small><b>OCT · OCTA · CFP</b></span>
-          <span><small>ANALYSIS ENGINE</small><b>04 PIPELINES</b></span>
+          <span><small>ANALYSIS ENGINE</small><b>{workspace === 'imaging' ? '04 PIPELINES' : 'TOOL AGENT'}</b></span>
           <span className={`service ${service}`}><small>SYSTEM STATUS</small><b><i /> {service === 'online' ? 'ONLINE' : service === 'offline' ? 'OFFLINE' : 'CHECKING'}</b></span>
         </div>
       </header>
 
       <main>
+        {workspace === 'amd' ? <AMDWorkspace apiUrl={API_URL}/> : <>
         <section className="intro-row">
           <div><span className="eyebrow">OPHTHALMIC IMAGING WORKBENCH // V2.0</span><h1>从影像质量到微血管形态，<br /><em>一站式完成眼科影像分析。</em></h1></div>
           <p>支持 OCT、OCTA 与眼底彩照。每项能力均已配置默认病例、可运行引擎和来源说明，可直接开始实验。</p>
@@ -151,6 +158,7 @@ function App() {
         </section>
 
         {error && <div className="error-banner"><CircleAlert size={16} />{error}</div>}
+        </>}
         <footer><p><ShieldAlert size={14} />科研与教学演示系统，输出不构成临床诊断或治疗建议。</p><span>MODEL & CODE PROVENANCE AVAILABLE · BUILD 2026.08</span></footer>
       </main>
     </div>
