@@ -32,6 +32,9 @@ investigation/
 # Evaluation reports
 reports/
 
+# Server runtime logs
+logs/
+
 # Claude Code
 CLAUDE.md
 .claude
