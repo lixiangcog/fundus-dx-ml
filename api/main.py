@@ -22,7 +22,7 @@ from api.pipelines import CAPABILITIES, PIPELINES, PIPELINE_INDEX
 from api.amd_agent import DEFAULT_CASE, public_status as amd_agent_status
 from api.amd_agent import run_case as run_amd_case, run_default_case as run_default_amd_case
 
-APP_VERSION = "3.0.0"
+APP_VERSION = "3.1.0"
 MAX_UPLOAD_BYTES = 12 * 1024 * 1024
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"

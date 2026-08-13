@@ -44,3 +44,24 @@ algorithm in the API and UI.
   file `OCT/OCT1/1221_OD_o_2.jpg`; see the repository dataset citation and terms.
 - OCTA image: `aiforvision/OCTA-autosegmentation`, MIT, pinned commit above.
 - Fundus photograph: existing project teaching sample.
+
+## VisionUnite V1 fundus specialist
+
+- Repository: https://github.com/HUANGLIZI/VisionUnite (MIT code), pinned source snapshot `3dab080ef21d946c4dfaab26572de3828c598090`.
+- The vendored inference subset removes the unused bundled ImageBind module; it is not imported or executed by the deployed service.
+- A deployment patch fixes five copy/paste threshold comparisons in the upstream six-head abnormality flag post-processing; each head is now compared against its own normal logit.
+- Artifact: public `checkpoint-VisionUniteV1.pth` linked by the authors in the
+  repository README; the project cites VisionUnite when this artifact is used.
+- Scope in this workbench: independent review of baseline and follow-up color
+  fundus photographs, including the model's six abnormality signal heads and
+  generated descriptions. It is not used to interpret OCT or OCTA.
+- The README separately restricts access to **further MMFundus pretrained
+  models** to academic research and excludes commercial use/second development.
+  Those further weights are not downloaded or integrated here.
+- The service accepts the public V1 checkpoint only when every model parameter
+  is present in that checkpoint. It does not download a separate LLaMA weight
+  file; tokenizer compatibility files are pinned to the original LLaMA-7B
+  format. The integration remains research-only under the V1 usage context.
+- Limitations: VisionUnite is a research model, not a medical device; its output
+  is preserved as a separately attributed specialist observation and cannot
+  select the final clinical action.

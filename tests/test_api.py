@@ -73,3 +73,21 @@ def test_predict_rejects_corrupt_image():
         files={"file": ("fake.png", io.BytesIO(b"\x89PNG but not really"), "image/png")},
     )
     assert response.status_code == 400
+
+
+def test_amd_status_requires_both_real_mllm_services():
+    response = client.get("/amd-agent/status")
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body["services"]) == {"multimodal", "fundus_specialist"}
+    assert body["fallback_generation"] is False
+    assert body["real_inference_required"] is True
+
+
+def test_amd_config_declares_dual_specialist_runtime():
+    response = client.get("/amd-agent/config")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["research_only"] is True
+    assert body["service"]["model"] == "Qwen2.5-VL-3B-Instruct + VisionUnite V1"
+    assert len(body["required_images"]) == 6

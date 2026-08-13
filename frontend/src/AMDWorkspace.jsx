@@ -10,7 +10,7 @@ import {
 const STEPS = [
   { id:'case', label:'CASE TIMELINE', icon:Clock3 },
   { id:'tools', label:'IMAGING TOOLS', icon:ScanLine },
-  { id:'vision', label:'MULTIMODAL AI', icon:Eye },
+  { id:'vision', label:'DUAL MLLM REVIEW', icon:Eye },
   { id:'rag', label:'EVIDENCE RAG', icon:Database },
   { id:'decision', label:'OPTION REVIEW', icon:Waypoints },
   { id:'report', label:'FINAL REPORT', icon:FileCheck2 },
@@ -25,7 +25,7 @@ function StatusBadge({ service }) {
   const ready = service?.status === 'ready';
   return <div className={`agent-service ${ready ? 'ready' : 'waiting'}`}>
     <span><Server size={14}/><i/></span>
-    <div><small>LOCAL MLLM SERVICE</small><b>{ready ? 'QWEN2.5-VL / READY' : (service?.status || 'CHECKING').toUpperCase()}</b></div>
+    <div><small>DUAL SPECIALIST RUNTIME</small><b>{ready ? 'QWEN + VISIONUNITE / READY' : (service?.status || 'CHECKING').toUpperCase()}</b></div>
   </div>;
 }
 
@@ -126,9 +126,10 @@ function AMDWorkspace({ apiUrl }) {
 
       <aside className="agent-launch">
         <div className="amd-panel-head"><span><BrainCircuit size={14}/> AGENT RUNTIME</span><b>REAL EXECUTION</b></div>
-        <div className="model-core"><span><BrainCircuit size={30}/><i/><em/></span><b>QWEN2.5-VL</b><small>3B / BF16 / A800 GPU</small></div>
+        <div className="model-core"><span><BrainCircuit size={30}/><i/><em/></span><b>QWEN + VISIONUNITE</b><small>CROSS-MODAL + FUNDUS SPECIALIST</small></div>
         <ul>
-          <li><Check size={12}/>Six images enter the vision encoder</li>
+          <li><Check size={12}/>Qwen compares all six multimodal images</li>
+          <li><Check size={12}/>VisionUnite reviews both fundus visits</li>
           <li><Check size={12}/>Three imaging tools execute independently</li>
           <li><Check size={12}/>Guideline retrieval constrains evidence</li>
           <li><Check size={12}/>Rules select the final action</li>
@@ -160,12 +161,17 @@ function AgentResult({ result, onReset }) {
     <div className="result-layout">
       <div className="result-main">
         <section className="report-card">
-          <div className="amd-panel-head"><span><BrainCircuit size={14}/> MLLM CLINICAL SYNTHESIS</span><b>QWEN2.5-VL / VERIFIED</b></div>
+          <div className="amd-panel-head"><span><BrainCircuit size={14}/> DUAL-MLLM CLINICAL SYNTHESIS</span><b>QWEN + VISIONUNITE / VERIFIED</b></div>
           <div className="report-sections">
             <article><small>01 / CASE SUMMARY</small><p>{report.case_summary}</p></article>
             <article><small>02 / IMAGING INTERPRETATION</small><p>{report.imaging_interpretation}</p></article>
             <article><small>03 / EVIDENCE INTEGRATION</small><p>{report.evidence_integration}</p></article>
             <article><small>04 / FOLLOW-UP PLAN</small><p>{report.followup_schedule}</p></article>
+          </div>
+          <div className="specialist-strip">
+            <span><Eye size={15}/>VISIONUNITE FUNDUS SPECIALIST</span>
+            <article><small>V0 / BASELINE</small><p>{result.fundus_specialist_reasoning?.baseline?.text}</p></article>
+            <article><small>V1 / FOLLOW-UP</small><p>{result.fundus_specialist_reasoning?.followup?.text}</p></article>
           </div>
           <div className="safety-triggers"><span><ShieldAlert size={16}/>ESCALATION TRIGGERS</span>{(report.safety_triggers || []).map((item,index)=><p key={index}>{item}</p>)}</div>
           {report.uncertainty && <p className="uncertainty"><AlertTriangle size={13}/>{report.uncertainty}</p>}

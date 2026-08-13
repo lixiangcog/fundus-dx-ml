@@ -44,3 +44,6 @@ CLAUDE.md
 runtime/
 
 .claude
+
+# Downloaded model artifacts
+models/

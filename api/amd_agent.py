@@ -28,7 +28,8 @@ from api.pipelines import lesion_recognition, structure_segmentation, vascular_q
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_DIR = PROJECT_ROOT / "runtime"
 CASE_DIR = RUNTIME_DIR / "amd_cases"
-STATUS_FILE = RUNTIME_DIR / "qwen_service.json"
+QWEN_STATUS_FILE = RUNTIME_DIR / "qwen_service.json"
+VISIONUNITE_STATUS_FILE = RUNTIME_DIR / "visionunite_service.json"
 NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 TOKEN_FILE = RUNTIME_DIR / "agent_token"
 EVIDENCE_FILE = PROJECT_ROOT / "data" / "amd_evidence.json"
@@ -64,11 +65,11 @@ def ensure_agent_token() -> str:
     return TOKEN_FILE.read_text(encoding="utf-8").strip()
 
 
-def _service_status() -> dict[str, Any]:
-    if not STATUS_FILE.is_file():
+def _service_status(status_file: Path) -> dict[str, Any]:
+    if not status_file.is_file():
         return {"status": "offline", "detail": "GPU service has not registered"}
     try:
-        status = json.loads(STATUS_FILE.read_text(encoding="utf-8"))
+        status = json.loads(status_file.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {"status": "offline", "detail": "Invalid GPU service status"}
     age = time.time() - float(status.get("updated_at", 0))
@@ -90,22 +91,44 @@ def _service_status() -> dict[str, Any]:
 
 
 def public_status() -> dict[str, Any]:
-    status = _service_status()
+    qwen = _service_status(QWEN_STATUS_FILE)
+    visionunite = _service_status(VISIONUNITE_STATUS_FILE)
+    ready = qwen.get("status") == "ready" and visionunite.get("status") == "ready"
+    states = {qwen.get("status"), visionunite.get("status")}
     return {
-        "status": status.get("status", "offline"),
-        "model": status.get("model", "Qwen2.5-VL-3B-Instruct"),
-        "job_id": status.get("job_id", ""),
-        "node": status.get("host", ""),
+        "status": "ready" if ready else "loading" if "loading" in states else "offline",
+        "model": "Qwen2.5-VL-3B-Instruct + VisionUnite V1",
+        "services": {
+            "multimodal": {
+                "status": qwen.get("status", "offline"),
+                "model": qwen.get("model", "Qwen2.5-VL-3B-Instruct"),
+                "job_id": qwen.get("job_id", ""),
+                "node": qwen.get("host", ""),
+                "detail": qwen.get("detail", ""),
+            },
+            "fundus_specialist": {
+                "status": visionunite.get("status", "offline"),
+                "model": visionunite.get("model", "VisionUnite V1"),
+                "job_id": visionunite.get("job_id", ""),
+                "node": visionunite.get("host", ""),
+                "detail": visionunite.get("detail", ""),
+            },
+        },
         "real_inference_required": True,
         "fallback_generation": False,
-        "detail": status.get("detail", ""),
+        "detail": "" if ready else "Qwen2.5-VL and VisionUnite V1 must both be ready; fallback is disabled.",
     }
 
-
-def _qwen_infer(prompt: str, images: list[Path], max_new_tokens: int = 700) -> dict[str, Any]:
-    status = _service_status()
+def _gpu_infer(
+    status_file: Path,
+    service_name: str,
+    prompt: str,
+    images: list[Path],
+    max_new_tokens: int,
+) -> dict[str, Any]:
+    status = _service_status(status_file)
     if status.get("status") != "ready":
-        raise RuntimeError(status.get("detail") or "Qwen-VL GPU service is not ready")
+        raise RuntimeError(status.get("detail") or f"{service_name} GPU service is not ready")
     body = json.dumps({
         "prompt": prompt,
         "images": [str(path.resolve()) for path in images],
@@ -123,13 +146,26 @@ def _qwen_infer(prompt: str, images: list[Path], max_new_tokens: int = 700) -> d
             result = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Qwen-VL inference failed ({exc.code}): {detail}") from exc
+        raise RuntimeError(f"{service_name} inference failed ({exc.code}): {detail}") from exc
     except (urllib.error.URLError, socket.timeout, TimeoutError) as exc:
-        raise RuntimeError(f"Qwen-VL inference unavailable: {exc}") from exc
-    if not result.get("real_inference") or not result.get("text"):
-        raise RuntimeError("Qwen-VL returned no verified inference output")
+        raise RuntimeError(f"{service_name} inference unavailable: {exc}") from exc
+    if not result.get("real_inference"):
+        raise RuntimeError(f"{service_name} returned no verified inference output")
     return result
 
+
+def _qwen_infer(prompt: str, images: list[Path], max_new_tokens: int = 700) -> dict[str, Any]:
+    result = _gpu_infer(QWEN_STATUS_FILE, "Qwen-VL", prompt, images, max_new_tokens)
+    if not result.get("text"):
+        raise RuntimeError("Qwen-VL returned no verified inference text")
+    return result
+
+
+def _visionunite_infer(prompt: str, images: list[Path], max_new_tokens: int = 256) -> dict[str, Any]:
+    result = _gpu_infer(VISIONUNITE_STATUS_FILE, "VisionUnite", prompt, images, max_new_tokens)
+    if not result.get("observations") or len(result["observations"]) != len(images):
+        raise RuntimeError("VisionUnite returned an incomplete specialist batch")
+    return result
 
 def _json_from_text(text: str) -> dict[str, Any]:
     cleaned = re.sub(r"^\s*```(?:json)?|\s*```\s*$", "", text.strip(), flags=re.I)
@@ -236,11 +272,11 @@ def _contains_any(text: str, terms: Iterable[str]) -> bool:
     return any(term.lower() in lowered for term in terms)
 
 
-def _evaluate_options(case: dict, tools: dict, vision: dict, evidence: list[dict]) -> tuple[list[dict], dict]:
+def _evaluate_options(case: dict, tools: dict, vision: dict, specialist: dict, evidence: list[dict]) -> tuple[list[dict], dict]:
     visits = case["visits"]
     vision_delta = float(visits[1]["bcva_logmar"]) - float(visits[0]["bcva_logmar"])
     deltas = tools["deltas"]
-    vision_text = json.dumps(vision, ensure_ascii=False)
+    vision_text = json.dumps({"generalist": vision, "fundus_specialist": specialist}, ensure_ascii=False)
     active_visual = _contains_any(vision_text, ["new fluid", "increased fluid", "新发液体", "液体增加", "new hemorrhage", "新出血", "worsening"])
     uncertain = "raw_text" in vision or _contains_any(vision_text, ["uncertain", "无法", "cannot determine", "质量不足"])
     objective_activity = vision_delta >= 0.1 or deltas["oct_thickness_proxy_percent"] > 10 or deltas["amd_probability_points"] > 15
@@ -296,14 +332,15 @@ Return JSON only. All string values must be Simplified Chinese:
 }}"""
 
 
-def _report_prompt(case: dict, tools: dict, vision: dict, options: list[dict], state: dict, evidence: list[dict]) -> str:
+def _report_prompt(case: dict, tools: dict, vision: dict, specialist: dict, options: list[dict], state: dict, evidence: list[dict]) -> str:
     chosen = options[0]
     compact_evidence = [{"id": e["id"], "evidence": e["evidence"]} for e in evidence]
     return f"""You are a retinal clinical decision-support assistant. A deterministic rule engine has already selected the action; do not replace it.
 Selected action: {chosen["title"]}; disease state: {state["activity"]}.
 Case: {json.dumps(case, ensure_ascii=False)}
 Quantitative tool deltas: {json.dumps(tools["deltas"], ensure_ascii=False)}
-Multimodal model observations: {json.dumps(vision, ensure_ascii=False)}
+Cross-modal Qwen observations: {json.dumps(vision, ensure_ascii=False)}
+VisionUnite fundus specialist observations: {json.dumps(specialist, ensure_ascii=False)}
 Candidate evaluations: {json.dumps(options, ensure_ascii=False)}
 Allowed evidence: {json.dumps(compact_evidence, ensure_ascii=False)}
 Use only this evidence. Do not add unprovided drugs, doses, or numeric thresholds. Return JSON only and write all values in Simplified Chinese:
@@ -320,6 +357,17 @@ Use only this evidence. Do not add unprovided drugs, doses, or numeric threshold
 
 def run_default_case(model, transform, class_names) -> dict[str, Any]:
     return run_case(DEFAULT_CASE, DEFAULT_IMAGES, model, transform, class_names)
+
+
+def _specialist_prompt(case: dict) -> str:
+    patient = case["patient"]
+    return (
+        "Ophthalmic fundus-only review. Describe visible macular, hemorrhage/exudation, "
+        "optic-disc, color/boundary and arteriovenous findings; state image quality and "
+        "uncertainty. Do not infer OCT/OCTA findings, diagnose, or recommend treatment. "
+        f"Context: age {patient['age']}, {patient['eye']}, prior diagnosis {patient['diagnosis']}. "
+        "Keep the response under 120 words."
+    )
 
 
 def run_case(case: dict, images: dict[str, Path], model, transform, class_names) -> dict[str, Any]:
@@ -343,14 +391,25 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
     vision = _json_from_text(vision_result["text"])
     trace.append({"tool": "qwen_vl_longitudinal_compare", "status": "completed", "runtime_ms": vision_result["runtime_ms"], "model": vision_result["model"], "input_images": 6, "real_execution": True})
 
-    query = f"nAMD OCT fluid BCVA treat-and-extend interval recurrence switch poor response {case['context']} {json.dumps(vision, ensure_ascii=False)}"
+    specialist_result = _visionunite_infer(
+        _specialist_prompt(case),
+        [saved_paths["baseline_fundus"], saved_paths["followup_fundus"]],
+        max_new_tokens=256,
+    )
+    specialist = {
+        "baseline": specialist_result["observations"][0],
+        "followup": specialist_result["observations"][1],
+    }
+    trace.append({"tool": "visionunite_fundus_specialist", "status": "completed", "runtime_ms": specialist_result["runtime_ms"], "model": specialist_result["model"], "input_images": 2, "real_execution": True})
+
+    query = f"nAMD OCT fluid BCVA treat-and-extend interval recurrence switch poor response {case['context']} {json.dumps(vision, ensure_ascii=False)} {json.dumps(specialist, ensure_ascii=False)}"
     evidence = _retrieve(query, top_k=5)
     trace.append({"tool": "bm25_evidence_retrieval", "status": "completed", "documents": len(evidence), "corpus": len(json.loads(EVIDENCE_FILE.read_text(encoding="utf-8"))), "real_execution": True})
 
-    options, state = _evaluate_options(case, tools, vision, evidence)
+    options, state = _evaluate_options(case, tools, vision, specialist, evidence)
     trace.append({"tool": "candidate_option_evaluator", "status": "completed", "options": len(options), "selection": "programmatic", "real_execution": True})
 
-    report_result = _qwen_infer(_report_prompt(case, tools, vision, options, state, evidence), [], max_new_tokens=850)
+    report_result = _qwen_infer(_report_prompt(case, tools, vision, specialist, options, state, evidence), [], max_new_tokens=850)
     report = _json_from_text(report_result["text"])
     selected = options[0]
     model_report_draft = dict(report)
@@ -375,6 +434,7 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
         "clinical_state": state,
         "tool_results": tools,
         "vision_reasoning": vision,
+        "fundus_specialist_reasoning": specialist,
         "evidence": evidence,
         "options": options,
         "decision": {
@@ -389,6 +449,7 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
         "tool_trace": trace,
         "provenance": {
             "vision_model": vision_result["model"],
+            "fundus_specialist_model": specialist_result["model"],
             "report_model": report_result["model"],
             "real_mllm_inference": True,
             "fallback_generation": False,
