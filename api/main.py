@@ -1,18 +1,30 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import torch
 from PIL import Image, UnidentifiedImageError
 import io
 import sys
 import os
+import time
+from pathlib import Path
 import uvicorn
 
 # Add parent dir to path so 'shared' resolves when running from api/ or project root
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from shared import CLASS_NAMES, get_device, get_inference_transform, build_resnet18
 
-app = FastAPI(title="Fundus Classification API")
+APP_VERSION = "1.1.0"
+MAX_UPLOAD_BYTES = 12 * 1024 * 1024
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
+
+app = FastAPI(
+    title="Fundus DX Screening API",
+    version=APP_VERSION,
+    description="Research-only four-class fundus photograph screening service.",
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,7 +40,7 @@ device = get_device()
 def load_model():
     model = build_resnet18(len(class_names))
 
-    model_path = "best_model.pth"
+    model_path = PROJECT_ROOT / "best_model.pth"
     state_dict = torch.load(model_path, map_location=device)
     model.load_state_dict(state_dict)
 
@@ -40,8 +52,36 @@ model = load_model()
 
 transform = get_inference_transform()
 
+
+@app.get("/health")
+async def health():
+    """Lightweight readiness endpoint used by the screening workstation."""
+    return {
+        "status": "ok",
+        "model_loaded": model is not None,
+        "device": str(device),
+        "version": APP_VERSION,
+    }
+
+
+@app.get("/model-info")
+async def model_info():
+    """Describe the deployed model without exposing implementation internals."""
+    return {
+        "name": "ResNet18 fundus classifier",
+        "modality": "color_fundus_photograph",
+        "classes": class_names,
+        "input_size": [224, 224],
+        "validation_accuracy": 0.977,
+        "clinical_use": False,
+    }
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
+    frontend_index = FRONTEND_DIST / "index.html"
+    if frontend_index.is_file():
+        return FileResponse(frontend_index)
+
     return """
 <!DOCTYPE html>
 <html lang="en">
@@ -167,10 +207,13 @@ async def root():
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
-    if not file.content_type.startswith("image/"):
+    if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
     
     contents = await file.read()
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Image must be 12 MB or smaller")
+
     try:
         image = Image.open(io.BytesIO(contents)).convert("RGB")
     except UnidentifiedImageError:
@@ -178,7 +221,8 @@ async def predict(file: UploadFile = File(...)):
 
     input_tensor = transform(image).unsqueeze(0).to(device)
 
-    with torch.no_grad():
+    inference_started = time.perf_counter()
+    with torch.inference_mode():
         outputs = model(input_tensor)
         probabilities = torch.nn.functional.softmax(outputs, dim=1)
 
@@ -189,11 +233,20 @@ async def predict(file: UploadFile = File(...)):
 
         all_probs = {class_names[i]: probabilities[0][i].item() for i in range(len(class_names))}
 
+    inference_ms = round((time.perf_counter() - inference_started) * 1000, 1)
+
     return {
         "prediction": predicted_class,
         "confidence": confidence,
-        "probabilities": all_probs
+        "probabilities": all_probs,
+        "inference_ms": inference_ms,
+        "model_version": APP_VERSION,
     }
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+# Production builds are served by the API so browser requests remain same-origin.
+# API routes above take precedence over this catch-all static mount.
+app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True, check_dir=False), name="frontend")

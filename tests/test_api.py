@@ -22,7 +22,25 @@ def synthetic_image_bytes():
 def test_root_returns_landing_page():
     response = client.get("/")
     assert response.status_code == 200
-    assert "Fundus Classification API" in response.text
+    assert "Fundus Classification API" in response.text or "Fundus DX" in response.text
+
+
+def test_health_reports_loaded_model():
+    response = client.get("/health")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["model_loaded"] is True
+    assert body["version"]
+
+
+def test_model_info_describes_supported_scope():
+    response = client.get("/model-info")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["modality"] == "color_fundus_photograph"
+    assert body["classes"] == CLASS_NAMES
+    assert body["clinical_use"] is False
 
 
 def test_predict_returns_valid_prediction():
@@ -37,6 +55,8 @@ def test_predict_returns_valid_prediction():
     assert set(body["probabilities"]) == set(CLASS_NAMES)
     assert math.isclose(sum(body["probabilities"].values()), 1.0, abs_tol=1e-4)
     assert body["confidence"] == pytest.approx(max(body["probabilities"].values()))
+    assert body["inference_ms"] >= 0
+    assert body["model_version"]
 
 
 def test_predict_rejects_non_image_content_type():

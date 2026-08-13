@@ -1,183 +1,68 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { BrainCircuit, FileCheck2, LocateFixed, ScanEye } from 'lucide-react';
 
-const PIPELINE_STEPS = [
-  { label: 'Input image', note: '(H, W, C)' },
-  { label: 'Resize 224×224 + ImageNet normalize', note: null },
-  { label: 'ResNet18 forward pass', note: null },
-  { label: 'Logits', note: '(1×4)' },
-  { label: 'Softmax', note: null },
-  { label: 'Probability distribution', note: null },
+const ROADMAP = [
+  {
+    number: '01',
+    title: '分类工作站',
+    status: '本次完成',
+    icon: BrainCircuit,
+    body: '病例信息、影像导入、服务状态、四分类推理、概率分布与不确定性提示。',
+  },
+  {
+    number: '02',
+    title: '病灶可解释性',
+    status: '下一阶段',
+    icon: LocateFixed,
+    body: '接入 Grad-CAM 热力图、原图叠加、关键区域标注与图像质量控制。',
+  },
+  {
+    number: '03',
+    title: '临床报告',
+    status: '规划中',
+    icon: FileCheck2,
+    body: '生成结构化 PDF 报告，包含筛查结论、图像、概率、复核意见与审计信息。',
+  },
 ];
 
-const Block = ({ index, title, children }) => (
-  <div>
-    <h3 className="flex items-baseline gap-3 text-base font-semibold">
-      <span className="mono-data text-sm font-normal" style={{ color: 'var(--accent-ink)' }}>
-        {String(index).padStart(2, '0')}
-      </span>
-      {title}
-    </h3>
-    <div className="mt-3 space-y-3 text-sm leading-relaxed" style={{ color: 'var(--ink-secondary)' }}>
-      {children}
-    </div>
-  </div>
-);
-
-const HowItWorks = () => {
-  const [activeTab, setActiveTab] = useState('simple');
-
-  const tabs = [
-    { id: 'simple', label: 'Plain English' },
-    { id: 'technical', label: 'Technical' },
-  ];
-
+function HowItWorks() {
   return (
-    <section className="mt-16">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+    <section className="system-section" id="roadmap">
+      <div className="section-heading">
         <div>
-          <span className="mono-label">03 · Notes</span>
-          <h2 className="text-2xl font-semibold tracking-tight mt-1.5">How it works</h2>
+          <span className="eyebrow">SYSTEM EVOLUTION</span>
+          <h2>从分类模型到完整工作站</h2>
         </div>
-
-        <div
-          className="flex border self-start sm:self-auto"
-          style={{ borderColor: 'var(--line)' }}
-          role="tablist"
-          aria-label="Explanation level"
-        >
-          {tabs.map((tab) => {
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                role="tab"
-                aria-selected={active}
-                onClick={() => setActiveTab(tab.id)}
-                className="px-4 py-2 text-sm font-medium transition-colors cursor-pointer"
-                style={
-                  active
-                    ? { background: 'var(--ink)', color: 'var(--paper)' }
-                    : { background: 'transparent', color: 'var(--ink-secondary)' }
-                }
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+        <p>每个阶段都以真实能力为准，不展示尚未实现的医学结果。</p>
       </div>
 
-      <div className="border p-6 sm:p-8" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>
-        <AnimatePresence mode="wait">
-          {activeTab === 'simple' ? (
-            <motion.div
-              key="simple"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="grid md:grid-cols-2 gap-x-12 gap-y-8"
-            >
-              <Block index={1} title="Pattern recognition">
-                <p>
-                  Imagine an expert analyzing thousands of eye scans. Over time, patterns emerge,
-                  such as tiny spots or specific vessel changes, that correlate with certain conditions.
-                </p>
-                <p>
-                  The model works on the same principle. By processing thousands of examples of
-                  healthy and affected eyes (including AMD, cataracts, and diabetic retinopathy),
-                  it learned the visual features associated with each condition.
-                </p>
-              </Block>
+      <div className="roadmap-grid">
+        {ROADMAP.map((item) => {
+          const Icon = item.icon;
+          return (
+            <article className={item.number === '01' ? 'current' : ''} key={item.number}>
+              <div className="roadmap-head"><span>{item.number}</span><Icon size={20} /></div>
+              <small>{item.status}</small>
+              <h3>{item.title}</h3>
+              <p>{item.body}</p>
+            </article>
+          );
+        })}
+      </div>
 
-              <Block index={2} title="Instant analysis">
-                <p>
-                  When you upload an image, the model breaks it down into pixels and compares
-                  them against the patterns it knows.
-                </p>
-                <p>
-                  In under a second it produces a confidence score. A 98% cataract score means the
-                  image looks 98% similar to the confirmed cataract cases it studied during training.
-                </p>
-              </Block>
-
-              <div className="md:col-span-2 pt-6 border-t" style={{ borderColor: 'var(--line)' }}>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                  {['Upload image', 'Analysis', 'Pattern matching', 'Result'].map((step, i, arr) => (
-                    <React.Fragment key={step}>
-                      <span className="text-sm" style={{ color: 'var(--ink-secondary)' }}>
-                        <span className="mono-data mr-2" style={{ color: 'var(--ink-muted)' }}>{i + 1}</span>
-                        {step}
-                      </span>
-                      {i < arr.length - 1 && (
-                        <span aria-hidden="true" style={{ color: 'var(--line-strong)' }}>→</span>
-                      )}
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="technical"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="grid md:grid-cols-2 gap-x-12 gap-y-8"
-            >
-              <div className="space-y-8">
-                <Block index={1} title="Model architecture">
-                  <p>
-                    A <strong className="font-semibold" style={{ color: 'var(--ink)' }}>ResNet18</strong>:
-                    an 18-layer convolutional network with skip connections, which let gradients
-                    flow through deep layers during training and avoid the vanishing-gradient problem.
-                  </p>
-                </Block>
-
-                <Block index={2} title="Transfer learning">
-                  <p>
-                    The network starts from ImageNet weights (1.2M images), so it already detects
-                    edges and textures. The final fully connected layer is replaced to output the
-                    4 target classes: normal, AMD, cataract, and diabetic retinopathy.
-                  </p>
-                </Block>
-              </div>
-
-              <div className="space-y-8">
-                <Block index={3} title="Training pipeline">
-                  <ul className="space-y-2">
-                    <li><strong className="font-medium" style={{ color: 'var(--ink)' }}>Optimizer:</strong> SGD, momentum 0.9, learning rate 0.001</li>
-                    <li><strong className="font-medium" style={{ color: 'var(--ink)' }}>Loss:</strong> cross-entropy over 4 classes</li>
-                    <li><strong className="font-medium" style={{ color: 'var(--ink)' }}>Augmentation:</strong> random horizontal flips, rotations (±10°)</li>
-                    <li><strong className="font-medium" style={{ color: 'var(--ink)' }}>Early stop:</strong> at target validation accuracy</li>
-                  </ul>
-                </Block>
-
-                <Block index={4} title="Inference">
-                  <div
-                    className="mono-data text-xs leading-relaxed border p-4"
-                    style={{ borderColor: 'var(--line)', background: 'var(--surface-sunken)', color: 'var(--ink-secondary)' }}
-                  >
-                    {PIPELINE_STEPS.map((step, i) => (
-                      <div key={step.label} className="flex gap-2">
-                        <span style={{ color: 'var(--ink-muted)' }}>{i === 0 ? ' ' : '↓'}</span>
-                        <span>
-                          {step.label}
-                          {step.note && <span style={{ color: 'var(--ink-muted)' }}> {step.note}</span>}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </Block>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+      <div className="boundary-card">
+        <div className="boundary-icon"><ScanEye size={25} /></div>
+        <div>
+          <span className="eyebrow">CURRENT SYSTEM BOUNDARY</span>
+          <h3>当前处理的是彩色眼底照片，不是 OCT。</h3>
+          <p>
+            现有模型可在 AMD、白内障、糖尿病视网膜病变和正常四个类别间进行分类。
+            青光眼、视网膜脱离等范围外疾病不能被可靠排除；上线临床场景前还需要外部验证、
+            图像质量控制、阈值校准、人工复核和合规审批。
+          </p>
+        </div>
       </div>
     </section>
   );
-};
+}
 
 export default HowItWorks;
