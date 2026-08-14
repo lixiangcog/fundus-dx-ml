@@ -122,7 +122,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
         {STEPS[moduleId].map((step,index) => <div key={step}><span>0{index+1}</span><i/><b>{step}</b><Check size={13}/></div>)}
       </div>
       <div className="systemic-validation">
-        <span><ShieldCheck size={14}/>质量校验</span><b>{config.published_validation}</b><small>公开权重</small>
+        <span><ShieldCheck size={14}/>质量校验</span><b>{config.published_validation}</b>
       </div>
     </section>
 
