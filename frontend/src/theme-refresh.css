@@ -55,11 +55,6 @@ main{padding-top:32px}
 .capability-grid button:hover,.capability-grid button.active{border-color:#a98af8;border-left-color:var(--cyan);color:#1d1e2c;background:#fff;box-shadow:0 10px 24px rgba(80,54,150,.10)}
 .capability-grid button.active:after{box-shadow:none}.capability-symbol{border-color:#d8d1f5;border-radius:9px;color:#765cae}.capability-number,.capability-copy small{color:#858399}
 .state-dot{background:#9895a8}
-.overview-status{margin-top:0;margin-bottom:0;border:0;border-radius:18px;background:#373849;box-shadow:0 16px 42px rgba(41,40,59,.12)}
-.overview-status:before{background-image:linear-gradient(rgba(162,119,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(162,119,255,.04) 1px,transparent 1px)}
-.overview-status .overview-heading{border-color:rgba(255,255,255,.12)}.overview-status .overview-heading span{color:#fff}.overview-status .overview-heading b{color:#b8b8c7}
-.readiness-score{border-color:rgba(255,255,255,.09)}.readiness-score strong{color:#fff;text-shadow:none}.readiness-score span,.overview-status li{color:#d2d2dc}.readiness-bars{border-color:rgba(255,255,255,.09)}.readiness-bars i{background:#4b4c60}.overview-status li{border-color:rgba(255,255,255,.07);font-size:12px}
-.overview-status>button{border:0;border-radius:10px;clip-path:none;background:var(--cyan);color:#fff;box-shadow:0 8px 20px rgba(108,44,243,.25)}
 
 /* 分析工作台 */
 .pipeline-nav{gap:4px;border:1px solid #e8e5f2;border-radius:15px;padding:5px;background:#fff;box-shadow:0 12px 32px rgba(42,35,75,.055)}
@@ -136,7 +131,6 @@ main{padding-top:32px}
 .capability-number{font-size:10px}
 .capability-copy strong{font-size:15px;line-height:1.45}
 .capability-copy small{font-size:10px;line-height:1.7}
-.readiness-score span{font-size:12px}.overview-status li{font-size:12px}.overview-status>button span{font-size:13px}
 .station-heading>p{font-size:14px}
 
 .pipeline-nav strong{font-size:15px}.pipeline-no{font-size:10px}

@@ -2,7 +2,7 @@
 .command-overview {
   height: 500px;
   display: grid;
-  grid-template-columns: minmax(330px, 34%) minmax(520px, 43%) minmax(250px, 23%);
+  grid-template-columns: minmax(360px, 36%) minmax(650px, 1fr);
   position: relative;
   border-top: 1px solid rgba(8, 229, 237, .2);
   border-bottom: 1px solid rgba(8, 229, 237, .2);
@@ -137,12 +137,12 @@
 }
 
 .core-center small { font: 500 9px 'IBM Plex Mono'; letter-spacing: .9px; color: #78a5ab; }
-.core-center strong { font-size: 25px; letter-spacing: 1.8px; color: #f3feff; margin: 13px 0 12px; text-shadow: 0 0 13px rgba(8, 229, 237, .48); }
+.core-center strong { max-width: 165px; font-size: 22px; line-height: 1.35; letter-spacing: 1.2px; color: #f3feff; margin: 10px 0; text-shadow: 0 0 13px rgba(8, 229, 237, .48); }
 .core-center span { font-size: 10px; color: var(--cyan); border: 1px solid rgba(8, 229, 237, .45); border-radius: 18px; padding: 5px 12px; background: rgba(8, 229, 237, .04); }
 .core-scan { position: absolute; width: 355px; height: 355px; border-radius: 50%; overflow: hidden; animation: core-turn 8s linear infinite; }
 .core-scan::after { content: ''; position: absolute; left: 50%; top: 50%; width: 48%; height: 1px; background: linear-gradient(90deg, var(--cyan), transparent); box-shadow: 0 0 8px var(--cyan); transform-origin: left; }
 
-.capability-map { position: relative; padding: 30px 28px 26px 44px; display: flex; flex-direction: column; }
+.capability-map { position: relative; padding: 30px 34px 26px 48px; display: flex; flex-direction: column; }
 .overview-heading { height: 35px; display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 1px solid rgba(8, 229, 237, .13); position: relative; }
 .overview-heading::after { content: ''; position: absolute; left: 0; bottom: -1px; width: 58px; height: 1px; background: var(--cyan); box-shadow: 0 0 7px var(--cyan); }
 .overview-heading span { font-size: 14px; font-weight: 600; letter-spacing: .8px; color: #dff8fa; }
@@ -181,22 +181,6 @@
 .capability-copy small { font: 500 8px/2 'IBM Plex Mono'; color: #55757c; }
 .capability-grid button.active .state-dot { background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
 
-.overview-status { margin: 20px 20px 20px 0; padding: 21px 19px; border: 1px solid rgba(8, 229, 237, .24); background: linear-gradient(150deg, rgba(5, 24, 30, .9), rgba(1, 10, 14, .92)); position: relative; overflow: hidden; }
-.overview-status::before { content: ''; position: absolute; inset: 0; background-image: linear-gradient(rgba(8, 229, 237, .035) 1px, transparent 1px), linear-gradient(90deg, rgba(8, 229, 237, .035) 1px, transparent 1px); background-size: 20px 20px; pointer-events: none; }
-.readiness-score { height: 96px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid rgba(8, 229, 237, .1); position: relative; }
-.readiness-score strong { font: 700 48px/1 'Rajdhani'; color: #f1feff; text-shadow: 0 0 14px rgba(8, 229, 237, .35); }
-.readiness-score strong em { font-style: normal; font-size: 22px; color: var(--cyan); }
-.readiness-score span { font-size: 10px; line-height: 1.7; color: #71949a; }
-.readiness-bars { height: 60px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px 7px; align-content: center; border-bottom: 1px solid rgba(8, 229, 237, .1); }
-.readiness-bars i { height: 3px; background: #13343a; overflow: hidden; }
-.readiness-bars b { display: block; height: 100%; background: var(--cyan); box-shadow: 0 0 6px var(--cyan); animation: bar-breathe 2.4s ease-in-out infinite; }
-.overview-status ul { list-style: none; margin: 13px 0 17px; padding: 0; position: relative; }
-.overview-status li { height: 32px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid rgba(8, 229, 237, .07); color: #85a4aa; font-size: 10px; }
-.overview-status li svg { color: var(--cyan); }
-.overview-status > button { height: 45px; width: 100%; border: 1px solid var(--cyan); background: rgba(8, 229, 237, .1); color: var(--cyan); display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; position: relative; clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%); }
-.overview-status > button:hover { background: rgba(8, 229, 237, .19); box-shadow: 0 0 18px rgba(8, 229, 237, .1); }
-.overview-status > button span { font-size: 11px; font-weight: 600; letter-spacing: .5px; }
-
 .analysis-station { scroll-margin-top: 18px; }
 .station-heading { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 22px; }
 .station-heading h1 { font-size: 28px; line-height: 1.45; margin: 7px 0 0; letter-spacing: .7px; font-weight: 600; }
@@ -208,19 +192,16 @@
 @keyframes bar-breathe { 50% { opacity: .45; } }
 
 @media (max-width: 1450px) {
-  .command-overview { grid-template-columns: 31% 45% 24%; height: 470px; }
+  .command-overview { grid-template-columns: minmax(330px, 37%) minmax(610px, 1fr); height: 470px; }
   .ring-one { width: 300px; height: 300px; }
   .ring-two { width: 220px; height: 220px; }
   .core-center { width: 174px; height: 174px; }
   .core-scan { width: 305px; height: 305px; }
-  .core-center strong { font-size: 22px; }
+  .core-center strong { max-width: 150px; font-size: 20px; }
   .capability-map { padding-left: 35px; padding-right: 18px; }
   .capability-spine { left: 18px; }
   .capability-grid { gap: 12px; }
   .capability-grid button { height: 98px; padding-left: 9px; padding-right: 10px; grid-template-columns: 23px 32px minmax(0, 1fr) 6px; }
   .capability-symbol { width: 30px; height: 30px; }
   .capability-copy strong { font-size: 12px; }
-  .overview-status { margin-right: 12px; padding-left: 15px; padding-right: 15px; }
-  .readiness-score { gap: 10px; }
-  .readiness-score strong { font-size: 42px; }
 }

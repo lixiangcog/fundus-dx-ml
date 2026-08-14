@@ -170,7 +170,7 @@ function App() {
             <div className="core-ring ring-two" aria-hidden="true" />
             <div className="core-center">
               <small>OCT · OCTA · 眼底彩照</small>
-              <strong>影像分析核心</strong>
+              <strong>多模态影像分析内核</strong>
               <span>增强 · 分割 · 识别 · 定量</span>
             </div>
             <div className="core-scan" aria-hidden="true" />
@@ -192,17 +192,6 @@ function App() {
             </div>
           </div>
 
-          <aside className="overview-status">
-            <div className="overview-heading"><span>平台状态</span><b>实时就绪</b></div>
-            <div className="readiness-score"><strong>6<em>/6</em></strong><span>分析功能<br />均可直接运行</span></div>
-            <div className="readiness-bars" aria-hidden="true">{[82,94,76,88,100,90,72,96,84,92,78,100].map((width, index) => <i key={index}><b style={{ width: `${width}%` }} /></i>)}</div>
-            <ul>
-              <li><Check size={13} /><span>覆盖三类眼科影像</span></li>
-              <li><Check size={13} /><span>内置可运行默认病例</span></li>
-              <li><Check size={13} /><span>同步输出图像与定量结果</span></li>
-            </ul>
-            <button onClick={() => workbenchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><Play size={14} fill="currentColor" /><span>进入分析工作台</span></button>
-          </aside>
         </section>
 
         <section className="analysis-station" ref={workbenchRef}>
