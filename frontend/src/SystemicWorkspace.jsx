@@ -5,6 +5,8 @@ import {
   Activity, Brain, Check, CircleAlert, Eye, FileImage, HeartPulse,
   LoaderCircle, Play, RotateCcw, ScanLine, ShieldCheck, UploadCloud,
 } from 'lucide-react';
+import ModuleLog from './ModuleLog';
+import { useModuleLog } from './useModuleLog';
 import './systemic.css';
 
 const MAX_FILE_SIZE = 12 * 1024 * 1024;
@@ -29,6 +31,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
   const [activeView, setActiveView] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { entries: moduleLogs, write: writeModuleLog, clear: clearModuleLog } = useModuleLog(FALLBACK[moduleId]?.title || '系统模块');
   const fileInput = useRef(null);
   const Icon = ICONS[moduleId] || Eye;
 
@@ -43,35 +46,39 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
       const blob = await response.blob();
       installFile(new File([blob], `${moduleId}-default.jpg`, { type:blob.type || 'image/jpeg' }), URL.createObjectURL(blob));
       if (nextConfig.sample_age) setAge(nextConfig.sample_age);
-    } catch { setError('默认研究样例加载失败，请刷新后重试。'); }
+      writeModuleLog('info', '默认研究样例已载入', `${nextConfig.title} · 等待真实推理`);
+    } catch { setError('默认研究样例加载失败，请刷新后重试。'); writeModuleLog('error', '默认研究样例加载失败', '样本接口未返回有效彩照'); }
   };
 
   useEffect(() => {
     let current = true;
     fetch(`${apiUrl}/systemic/config`).then((response) => response.json()).then((payload) => {
       const next = payload.modules.find((item) => item.id === moduleId) || FALLBACK[moduleId];
-      if (current) { setConfig(next); setAge(next.sample_age || ''); loadDefault(next); }
-    }).catch(() => { if (current) { const next = FALLBACK[moduleId]; setConfig(next); setAge(next.sample_age || ''); loadDefault(next); } });
+      if (current) { setConfig(next); setAge(next.sample_age || ''); writeModuleLog('success', `${next.title}模块已初始化`, next.published_validation); loadDefault(next); }
+    }).catch(() => { if (current) { const next = FALLBACK[moduleId]; setConfig(next); setAge(next.sample_age || ''); writeModuleLog('warning', '模块配置读取失败', '已使用内置配置继续运行'); loadDefault(next); } });
     return () => { current = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moduleId]);
   useEffect(() => () => { if (preview.startsWith('blob:')) URL.revokeObjectURL(preview); }, [preview]);
 
   const chooseFile = (nextFile) => {
-    if (!nextFile?.type?.startsWith('image/')) { setError('请选择 JPG、PNG 或 WebP 彩照。'); return; }
-    if (nextFile.size > MAX_FILE_SIZE) { setError('影像不能超过 12 MB。'); return; }
+    if (!nextFile?.type?.startsWith('image/')) { setError('请选择 JPG、PNG 或 WebP 彩照。'); writeModuleLog('warning', '彩照格式不受支持', '允许 JPG、PNG 或 WebP'); return; }
+    if (nextFile.size > MAX_FILE_SIZE) { setError('影像不能超过 12 MB。'); writeModuleLog('warning', '彩照超过大小限制', '最大允许 12 MB'); return; }
     installFile(nextFile, URL.createObjectURL(nextFile));
+    writeModuleLog('info', '用户彩照已载入', `${(nextFile.size / 1024 / 1024).toFixed(2)} MB · 等待分析`);
   };
   const run = async () => {
     if (!file || loading) return;
-    if (moduleId === 'eye-age' && (!age || Number(age) < 18 || Number(age) > 100)) { setError('请输入 18 至 100 岁的实际年龄。'); return; }
+    if (moduleId === 'eye-age' && (!age || Number(age) < 18 || Number(age) > 100)) { setError('请输入 18 至 100 岁的实际年龄。'); writeModuleLog('warning', '实际年龄校验未通过', '请输入 18 至 100 岁'); return; }
     const data = new FormData(); data.append('file', file);
     if (moduleId === 'eye-age') data.append('chronological_age', age);
     setLoading(true); setResult(null); setError('');
+    writeModuleLog('run', `${config.title}推理已提交`, moduleId === 'eye-age' ? `实际年龄 ${age} 岁 · GPU 推理` : '分割与 75 项血管表型计算');
     try {
       const response = await axios.post(`${apiUrl}/systemic/analyze/${moduleId}`, data);
       setResult(response.data); setActiveView(0);
-    } catch (requestError) { setError(requestError.response?.data?.detail || '推理服务暂时不可用，请稍后重试。'); }
+      writeModuleLog('success', `${config.title}分析完成`, `${response.data.runtime_ms} 毫秒 · ${response.data.quality?.detail || '结果已返回'}`);
+    } catch (requestError) { setError(requestError.response?.data?.detail || '推理服务暂时不可用，请稍后重试。'); writeModuleLog('error', `${config.title}分析失败`, requestError.response?.data?.detail || '无法连接推理服务'); }
     finally { setLoading(false); }
   };
   const shownImage = result?.views?.[activeView]?.image || result?.result_image;
@@ -131,7 +138,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
             </AnimatePresence>
             {result && <span className="systemic-done"><Check size={12}/>分析完成</span>}
           </div>
-          {result?.views?.length > 1 && <nav className="view-switch">{result.views.map((view,index) => <button key={view.label} className={activeView === index ? 'active' : ''} onClick={() => setActiveView(index)}>{view.label}</button>)}</nav>}
+          {result?.views?.length > 1 && <nav className="view-switch">{result.views.map((view,index) => <button key={view.label} className={activeView === index ? 'active' : ''} onClick={() => { setActiveView(index); writeModuleLog('info', `切换结果视图：${view.label}`, '显示内容已更新'); }}>{view.label}</button>)}</nav>}
           <button className="systemic-run" onClick={run} disabled={!file || loading}><Play size={16} fill="currentColor"/>{loading ? '正在分析' : `开始${config.title}分析`}</button>
         </section>
 
@@ -146,6 +153,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
           </motion.div> : <div className="systemic-placeholder"><div>{[38,64,48,82,58,92,46,72,54,86].map((height,index) => <i key={index} style={{height:`${height}%`}}/>)}</div><p>运行后显示分割、量化与结果解读。</p></div>}
         </aside>
       </div>
+      <ModuleLog title={config.title} entries={moduleLogs} onClear={clearModuleLog}/>
       {error && <div className="systemic-error"><CircleAlert size={15}/>{error}</div>}
     </section>
   </div>;

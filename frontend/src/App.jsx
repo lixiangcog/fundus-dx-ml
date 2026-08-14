@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import AMDWorkspace from './AMDWorkspace';
 import SystemicWorkspace from './SystemicWorkspace';
+import ModuleLog from './ModuleLog';
+import { useModuleLog } from './useModuleLog';
 import './overview.css';
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000' : window.location.origin);
@@ -49,15 +51,19 @@ function App() {
   const [service, setService] = useState('checking');
   const [dragging, setDragging] = useState(false);
   const [isDefault, setIsDefault] = useState(true);
+  const { entries: imagingLogs, write: writeImagingLog, clear: clearImagingLog } = useModuleLog('影像分析');
   const fileInput = useRef(null);
   const workbenchRef = useRef(null);
   const active = capabilities.find((item) => item.id === activeId) || capabilities[0];
 
   useEffect(() => {
     Promise.all([fetch(`${API_URL}/capabilities`).then((r) => r.json()), fetch(`${API_URL}/health`).then((r) => r.json())])
-      .then(([catalog, health]) => { setCapabilities(catalog.capabilities); setService(health.status === 'ok' ? 'online' : 'degraded'); })
-      .catch(() => setService('offline'));
-  }, []);
+      .then(([catalog, health]) => {
+        setCapabilities(catalog.capabilities); setService(health.status === 'ok' ? 'online' : 'degraded');
+        writeImagingLog('success', '分析功能初始化完成', `${catalog.capabilities.length} 项功能 · GPU 服务${health.imaging_service?.status === 'ready' ? '已就绪' : '待检查'}`);
+      })
+      .catch(() => { setService('offline'); writeImagingLog('error', '平台状态读取失败', '请检查网页服务和 SSH 转发'); });
+  }, [writeImagingLog]);
 
   const installFile = (nextFile, nextPreview, defaultFlag = false) => {
     if (preview?.startsWith('blob:')) URL.revokeObjectURL(preview);
@@ -70,7 +76,8 @@ function App() {
       if (!response.ok) throw new Error();
       const blob = await response.blob();
       installFile(new File([blob], fileName(capability.id), { type: blob.type || 'image/png' }), URL.createObjectURL(blob), true);
-    } catch { setError('默认病例加载失败，请刷新页面后重试。'); }
+      writeImagingLog('info', `${capability.title}默认病例已载入`, `${capability.default_modality} · 等待分析`);
+    } catch { setError('默认病例加载失败，请刷新页面后重试。'); writeImagingLog('error', `${capability.title}默认病例加载失败`, '样本接口未返回有效影像'); }
   };
 
   // The sample URL is the stable identity of the selected default case.
@@ -78,27 +85,38 @@ function App() {
   useEffect(() => { loadDefault(active); }, [activeId, active?.sample_url]);
   useEffect(() => () => { if (preview?.startsWith('blob:')) URL.revokeObjectURL(preview); }, [preview]);
 
-  const chooseCapability = (id) => { if (loading || id === activeId) return; setActiveId(id); };
+  const chooseCapability = (id) => {
+    if (loading || id === activeId) return;
+    const selected = capabilities.find((item) => item.id === id);
+    setActiveId(id); writeImagingLog('info', `切换至${selected?.title || id}`, '正在载入对应默认病例');
+  };
   const enterCapability = (id) => {
     if (loading) return;
-    if (id !== activeId) setActiveId(id);
+    if (id !== activeId) {
+      const selected = capabilities.find((item) => item.id === id);
+      setActiveId(id); writeImagingLog('info', `进入${selected?.title || id}`, '工作台已切换');
+    }
     window.requestAnimationFrame(() => workbenchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
   const processFile = (nextFile) => {
-    if (!nextFile?.type?.startsWith('image/')) { setError('请选择 JPG、PNG 或 WebP 影像。'); return; }
-    if (nextFile.size > MAX_FILE_SIZE) { setError('影像不能超过 12 MB。'); return; }
+    if (!nextFile?.type?.startsWith('image/')) { setError('请选择 JPG、PNG 或 WebP 影像。'); writeImagingLog('warning', '输入影像格式不受支持', '允许 JPG、PNG 或 WebP'); return; }
+    if (nextFile.size > MAX_FILE_SIZE) { setError('影像不能超过 12 MB。'); writeImagingLog('warning', '输入影像超过大小限制', '最大允许 12 MB'); return; }
     installFile(nextFile, URL.createObjectURL(nextFile));
+    writeImagingLog('info', '用户影像已载入', `${active.title} · ${(nextFile.size / 1024 / 1024).toFixed(2)} MB`);
   };
   const run = async () => {
     if (!file || loading) return;
     setLoading(true); setResult(null); setError('');
+    writeImagingLog('run', `${active.title}推理已提交`, `${isDefault ? '默认病例' : '用户影像'} · GPU 真实推理`);
     const data = new FormData(); data.append('file', file);
     if (isDefault && active.sample_id) data.append('sample_id', active.sample_id);
     try {
       const response = await axios.post(`${API_URL}/analyze/${active.id}`, data);
       setResult(response.data); setService('online');
+      writeImagingLog('success', `${active.title}分析完成`, `${response.data.runtime_ms} 毫秒 · ${response.data.quality?.label || '结果已返回'}`);
     } catch (requestError) {
       setError(requestError.response?.data?.detail || '推理服务暂时不可用，请稍后重试。');
+      writeImagingLog('error', `${active.title}分析失败`, requestError.response?.data?.detail || '无法连接推理服务');
       if (!requestError.response) setService('offline');
     } finally { setLoading(false); }
   };
@@ -123,7 +141,7 @@ function App() {
       </header>
 
       <main>
-        {workspace === 'amd' ? <AMDWorkspace apiUrl={API_URL}/> : SYSTEMIC_WORKSPACES[workspace] ? <SystemicWorkspace apiUrl={API_URL} moduleId={SYSTEMIC_WORKSPACES[workspace]} /> : <>
+        {workspace === 'amd' ? <AMDWorkspace apiUrl={API_URL}/> : SYSTEMIC_WORKSPACES[workspace] ? <SystemicWorkspace key={workspace} apiUrl={API_URL} moduleId={SYSTEMIC_WORKSPACES[workspace]} /> : <>
         <section className="command-overview">
           <div className="overview-lines" aria-hidden="true"><i /><i /><i /><span /><span /></div>
           <div className="analysis-core">
@@ -230,6 +248,7 @@ function App() {
           </section>
         </section>
 
+        <ModuleLog title={active.title} entries={imagingLogs} onClear={clearImagingLog}/>
         {error && <div className="error-banner"><CircleAlert size={16} />{error}</div>}
         </>}
         <footer><p><ShieldAlert size={14} />仅用于科研，结果不构成临床诊断或治疗建议。</p></footer>
