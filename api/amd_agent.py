@@ -23,7 +23,13 @@ from typing import Any, Iterable
 
 from PIL import Image
 
-from api.pipelines_v3 import disease_screening, structure_segmentation, vascular_quantification
+from api.pipelines_v3 import (
+    disease_screening,
+    fundus_lesion_quantification,
+    oct_fluid_quantification,
+    structure_segmentation,
+    vascular_quantification,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -201,10 +207,18 @@ def _metric_value(result: dict, label: str, default: float = 0.0) -> float:
     return default
 
 
+def _percent_change(followup: float, baseline: float) -> float | None:
+    """Return a signed percent change without inventing a value for a zero baseline."""
+    if abs(baseline) < 1e-6:
+        return 0.0 if abs(followup) < 1e-6 else None
+    return round((followup - baseline) / baseline * 100, 2)
+
+
 def _run_tools(paths: dict[str, Path], model, transform, class_names) -> dict[str, Any]:
     visits = {}
     for visit in ("baseline", "followup"):
         oct_result = structure_segmentation(Image.open(paths[f"{visit}_oct"]).convert("RGB"), image_path=paths[f"{visit}_oct"])
+        fluid_result = oct_fluid_quantification(Image.open(paths[f"{visit}_oct"]).convert("RGB"), image_path=paths[f"{visit}_oct"])
         octa_result = vascular_quantification(Image.open(paths[f"{visit}_octa"]).convert("RGB"), image_path=paths[f"{visit}_octa"])
         fundus_result = disease_screening(
             Image.open(paths[f"{visit}_fundus"]).convert("RGB"),
@@ -212,36 +226,66 @@ def _run_tools(paths: dict[str, Path], model, transform, class_names) -> dict[st
             transform=transform,
             class_names=class_names,
         )
+        lesion_result = fundus_lesion_quantification(
+            Image.open(paths[f"{visit}_fundus"]).convert("RGB"),
+            image_path=paths[f"{visit}_fundus"],
+        )
         visits[visit] = {
             "oct": {
                 "summary": oct_result["summary"],
                 "thickness_proxy_px": _metric_value(oct_result, "视网膜厚度代理"),
                 "retinal_area_percent": _metric_value(oct_result, "有效视网膜占比"),
                 "overlay": oct_result["result_image"],
-                "runtime_ms": oct_result["runtime_ms"],
+                "structure_overlay": oct_result["result_image"],
+                "fluid_overlay": fluid_result["result_image"],
+                "fluid_area_px": _metric_value(fluid_result, "液体面积"),
+                "fluid_ratio_percent": _metric_value(fluid_result, "液体占比"),
+                "fluid_components": _metric_value(fluid_result, "液体连通区"),
+                "max_fluid_height_px": _metric_value(fluid_result, "最大垂直高度"),
+                "quality": {"structure": oct_result.get("quality"), "fluid": fluid_result.get("quality")},
+                "runtime_ms": round(oct_result["runtime_ms"] + fluid_result["runtime_ms"], 1),
             },
             "octa": {
                 "summary": octa_result["summary"],
                 "vessel_density_percent": _metric_value(octa_result, "血管密度"),
+                "central_avascular_area_px2": _metric_value(octa_result, "中央无血管候选核心"),
                 "skeleton_length_px": _metric_value(octa_result, "骨架总长度"),
                 "branch_points": _metric_value(octa_result, "分支点"),
+                "end_points": _metric_value(octa_result, "端点"),
+                "average_caliber_px": _metric_value(octa_result, "平均管径代理"),
                 "fractal_dimension": _metric_value(octa_result, "分形维数"),
                 "overlay": octa_result["result_image"],
+                "quality": octa_result.get("quality"),
                 "runtime_ms": octa_result["runtime_ms"],
             },
             "fundus": {
-                "summary": fundus_result["summary"],
+                "summary": lesion_result["summary"],
+                "screening_summary": fundus_result["summary"],
                 "prediction": fundus_result["prediction"],
                 "confidence": fundus_result["confidence"],
                 "probabilities": fundus_result["probabilities"],
-                "overlay": fundus_result["result_image"],
-                "runtime_ms": fundus_result["runtime_ms"],
+                "overlay": lesion_result["result_image"],
+                "screening_overlay": fundus_result["result_image"],
+                "lesion_overlay": lesion_result["result_image"],
+                "cotton_wool_area_px": _metric_value(lesion_result, "棉絮斑/软性渗出面积"),
+                "hard_exudate_area_px": _metric_value(lesion_result, "硬性渗出面积"),
+                "hemorrhage_area_px": _metric_value(lesion_result, "出血面积"),
+                "microaneurysm_area_px": _metric_value(lesion_result, "微动脉瘤面积"),
+                "lesion_ratio_percent": _metric_value(lesion_result, "病灶总占比"),
+                "quality": lesion_result.get("quality"),
+                "runtime_ms": round(fundus_result["runtime_ms"] + lesion_result["runtime_ms"], 1),
             },
         }
     b, f = visits["baseline"], visits["followup"]
     deltas = {
-        "oct_thickness_proxy_percent": round((f["oct"]["thickness_proxy_px"] - b["oct"]["thickness_proxy_px"]) / max(b["oct"]["thickness_proxy_px"], 1) * 100, 2),
-        "octa_vessel_density_percent": round(f["octa"]["vessel_density_percent"] - b["octa"]["vessel_density_percent"], 2),
+        "oct_thickness_proxy_percent": _percent_change(f["oct"]["thickness_proxy_px"], b["oct"]["thickness_proxy_px"]),
+        "oct_fluid_area_percent": _percent_change(f["oct"]["fluid_area_px"], b["oct"]["fluid_area_px"]),
+        "oct_fluid_ratio_points": round(f["oct"]["fluid_ratio_percent"] - b["oct"]["fluid_ratio_percent"], 3),
+        "octa_vessel_density_points": round(f["octa"]["vessel_density_percent"] - b["octa"]["vessel_density_percent"], 2),
+        "octa_skeleton_length_percent": _percent_change(f["octa"]["skeleton_length_px"], b["octa"]["skeleton_length_px"]),
+        "octa_central_avascular_area_percent": _percent_change(f["octa"]["central_avascular_area_px2"], b["octa"]["central_avascular_area_px2"]),
+        "fundus_lesion_ratio_points": round(f["fundus"]["lesion_ratio_percent"] - b["fundus"]["lesion_ratio_percent"], 3),
+        "fundus_hemorrhage_area_percent": _percent_change(f["fundus"]["hemorrhage_area_px"], b["fundus"]["hemorrhage_area_px"]),
         "amd_probability_points": round((f["fundus"]["probabilities"].get("amd", 0) - b["fundus"]["probabilities"].get("amd", 0)) * 100, 2),
     }
     return {"visits": visits, "deltas": deltas}
@@ -347,6 +391,102 @@ def _evaluate_options(case: dict, tools: dict, vision: dict, specialist: dict, e
     return options, state
 
 
+def _build_procedure_plan(
+    case: dict,
+    state: dict,
+    selected: dict,
+    tools: dict,
+    model_draft: dict,
+    evidence: list[dict],
+) -> dict[str, Any]:
+    """Build a clinician-gated procedure plan from model synthesis plus fixed safety rules."""
+    eye = case.get("patient", {}).get("eye", "术眼待确认")
+    action_routes = {
+        "continue_monitor": "当前不自动新增侵入性操作；由专科确认是否沿用既有玻璃体腔治疗路径",
+        "shorten_interval": "复核玻璃体腔抗 VEGF 治疗路径，并由专科决定是否缩短治疗间隔",
+        "extend_interval": "仅在确认无活动后考虑延长治疗间隔，不自动取消既定治疗",
+        "switch_agent": "先复核诊断与既往反应，再由处方医生评估是否更换玻璃体腔治疗方案",
+        "reimage_expert_review": "先完成同协议复查与视网膜专科复核，再决定是否进行侵入性操作",
+    }
+    route = action_routes.get(selected.get("id"), "由视网膜专科根据原始影像确定操作路径")
+    available_ids = {item.get("id") for item in evidence}
+    procedure_evidence = [item for item in ("E7", "E8") if item in available_ids]
+    if not procedure_evidence:
+        procedure_evidence = selected.get("evidence_ids", [])[:2]
+
+    rationale = model_draft.get("planning_rationale") if isinstance(model_draft, dict) else None
+    if not isinstance(rationale, str) or not rationale.strip():
+        rationale = (
+            f"当前状态为 {state.get('activity', '待复核')}；程序化评估选择“{selected.get('title', '待定方案')}”。"
+            "本规划只整理操作准备与风险控制，不替代术者的适应证判断。"
+        )
+    model_considerations = model_draft.get("patient_specific_considerations") if isinstance(model_draft, dict) else []
+    if not isinstance(model_considerations, list):
+        model_considerations = []
+    default_considerations = [
+        f"{eye}既往接受过 {case.get('treatment', {}).get('injections', '多')} 次眼内治疗，应核对既往疗效与不良事件记录",
+        "本例默认影像来自论文缩略图，任何靶区与活动性判断都需在原始 OCT/OCTA/眼底影像上复核",
+        "本地像素定量与论文报告指标来源不同，不能直接替代设备原生物理测量",
+    ]
+    model_considerations = list(dict.fromkeys(
+        [str(item).strip() for item in model_considerations + default_considerations if str(item).strip()]
+    ))
+    required_decisions = model_draft.get("required_specialist_decisions") if isinstance(model_draft, dict) else []
+    if not isinstance(required_decisions, list):
+        required_decisions = []
+    default_decisions = [
+        "确认是否存在需要继续治疗的活动性新生血管病变",
+        "确认具体药物、剂量、治疗间隔与是否需要补充造影",
+        "确认是否存在感染、炎症、眼压或全身情况等延期因素",
+        "确认当前病例是否需要玻璃体视网膜手术；系统不会因 AMD 诊断自动触发手术",
+    ]
+    required_decisions = list(dict.fromkeys(
+        [str(item).strip() for item in required_decisions + default_decisions if str(item).strip()]
+    ))
+
+    return {
+        "title": "AMD 操作 / 手术规划草案",
+        "status": "待视网膜专科医生确认",
+        "planning_rationale": rationale,
+        "procedure_overview": {
+            "candidate_route": route,
+            "laterality": eye,
+            "target": "黄斑区病变活动控制；不提供注射点或手术导航坐标",
+            "timing": selected.get("title", "结合复查结果确定"),
+            "drug_and_dose": "不由系统生成，必须由处方医生确认",
+        },
+        "patient_specific_considerations": model_considerations,
+        "preoperative_checks": [
+            "核对患者身份、术眼、知情同意、当日药物与治疗记录",
+            "复核视力、眼压、原始 OCT/OCTA/眼底彩照及影像质量",
+            "排查活动性眼部感染或炎症，并询问既往注射并发症与过敏史",
+            "结合全身病史、当前用药和近期眼科操作，由临床团队完成风险评估",
+        ],
+        "intraoperative_plan": [
+            "仅由具备资质且完成培训的人员在符合规范的环境中实施",
+            "执行无菌流程，术前再次核对术眼、药物、批次和有效期",
+            "确保现场能够识别并处理急性眼压升高、出血等紧急情况",
+            "系统不输出注射位点、器械参数、药物剂量或替代术者判断的导航指令",
+        ],
+        "postoperative_monitoring": [
+            "记录实际术眼、药物、批次、操作人员和即时不良事件",
+            "向患者说明疼痛加重、进行性视力下降、明显红眼或分泌物等紧急复诊信号",
+            "按专科计划复查视力与 OCT，必要时复查 OCTA 和眼底彩照",
+            "将新发液体、出血或视力下降与本次基线定量结果进行纵向比较",
+        ],
+        "escalation_and_alternatives": [
+            "若出现新发或增加的液体、出血或视力下降，应提前复查并重新评估治疗间隔",
+            "若反应持续不佳，应复核诊断并考虑补充荧光素或吲哚菁绿造影等专科检查",
+            "更换药物、光动力治疗或玻璃体视网膜手术只能由专科在补充检查后决定",
+            "若出现疑似感染性眼内炎、视网膜脱离或其他严重并发症，应进入急诊处置流程",
+        ],
+        "required_specialist_decisions": required_decisions,
+        "evidence_ids": procedure_evidence,
+        "quantitative_context": tools.get("deltas", {}),
+        "research_notice": "该内容为结构化研究草案，不是处方、手术医嘱或可直接执行的术式方案。",
+    }
+
+
 def _vision_prompt(case: dict, tool_results: dict) -> str:
     return f"""You are an ophthalmic imaging assistant. Compare six images in this exact order:
 1 baseline OCT; 2 baseline OCTA; 3 baseline color fundus; 4 follow-up OCT; 5 follow-up OCTA; 6 follow-up color fundus.
@@ -376,15 +516,23 @@ Cross-modal Qwen observations: {json.dumps(vision, ensure_ascii=False)}
 VisionUnite fundus specialist observations: {json.dumps(specialist, ensure_ascii=False)}
 Candidate evaluations: {json.dumps(options, ensure_ascii=False)}
 Allowed evidence: {json.dumps(compact_evidence, ensure_ascii=False)}
-Use only this evidence. Do not add unprovided drugs, doses, or numeric thresholds. Return JSON only and write all values in Simplified Chinese:
+Use only this evidence. Do not add unprovided drugs, doses, injection coordinates, device parameters, or numeric thresholds.
+The procedure plan is a clinician-review draft, not an executable order. Return JSON only and write all values in Simplified Chinese:
 {{
   "case_summary": "...",
   "imaging_interpretation": "...",
+  "treatment_response": "...",
+  "quantitative_change": "...",
   "evidence_integration": "...",
   "recommended_plan": "...",
   "followup_schedule": "...",
   "safety_triggers": ["symptom or vision deterioration trigger", "new hemorrhage or increasing fluid trigger"],
-  "uncertainty": "..."
+  "uncertainty": "...",
+  "procedure_planning_draft": {{
+    "planning_rationale": "Explain whether an intravitreal procedure should be planned now or only after re-review",
+    "patient_specific_considerations": ["..."],
+    "required_specialist_decisions": ["..."]
+  }}
 }}"""
 
 
@@ -449,17 +597,66 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
     }
     trace.append({"tool": "visionunite_fundus_specialist", "status": "completed", "runtime_ms": specialist_result["runtime_ms"], "model": specialist_result["model"], "input_images": 2, "real_execution": True})
 
-    query = f"nAMD OCT fluid BCVA treat-and-extend interval recurrence switch poor response {case['context']} {json.dumps(vision, ensure_ascii=False)} {json.dumps(specialist, ensure_ascii=False)}"
-    evidence = _retrieve(query, top_k=5)
+    query = (
+        "nAMD OCT fluid BCVA treat-and-extend interval recurrence switch poor response "
+        "intravitreal injection consent checklist sterile site drug record postoperative safety "
+        f"{case['context']} {json.dumps(vision, ensure_ascii=False)} {json.dumps(specialist, ensure_ascii=False)}"
+    )
+    evidence = _retrieve(query, top_k=8)
     trace.append({"tool": "bm25_evidence_retrieval", "status": "completed", "documents": len(evidence), "corpus": len(json.loads(EVIDENCE_FILE.read_text(encoding="utf-8"))), "real_execution": True})
 
     options, state = _evaluate_options(case, tools, vision, specialist, evidence)
     trace.append({"tool": "candidate_option_evaluator", "status": "completed", "options": len(options), "selection": "programmatic", "real_execution": True})
 
-    report_result = _qwen_infer(_report_prompt(case, tools, vision, specialist, options, state, evidence), [], max_new_tokens=850)
+    report_result = _qwen_infer(_report_prompt(case, tools, vision, specialist, options, state, evidence), [], max_new_tokens=1100)
     report = _json_from_text(report_result["text"])
     selected = options[0]
     model_report_draft = dict(report)
+    model_procedure_draft = report.pop("procedure_planning_draft", {})
+    deltas = tools["deltas"]
+
+    def display_delta(key: str, unit: str) -> str:
+        value = deltas.get(key)
+        return "基线为 0，变化率不计算" if value is None else f"{value:+g}{unit}"
+
+    report.setdefault("case_summary", case.get("context", "病例信息需结合原始病历复核。"))
+    quantitative_change = (
+        f"本地分割模型测得：OCT 厚度代理 {display_delta('oct_thickness_proxy_percent', '%')}，"
+        f"液体面积 {display_delta('oct_fluid_area_percent', '%')}；"
+        f"OCTA 血管密度 {display_delta('octa_vessel_density_points', ' 个百分点')}，"
+        f"血管骨架 {display_delta('octa_skeleton_length_percent', '%')}；"
+        f"彩照病灶占比 {display_delta('fundus_lesion_ratio_points', ' 个百分点')}，"
+        f"AMD 筛查概率 {display_delta('amd_probability_points', ' 个百分点')}。"
+    )
+    model_observation = vision.get(
+        "change_assessment",
+        "多模态模型已完成两次就诊影像对比，具体征象需结合原始影像复核。",
+    )
+    report["imaging_interpretation"] = (
+        f"多模态模型观察：{model_observation} 本地量化结果：{quantitative_change} "
+        "模型文字与定量结果不一致时，以原始影像和专科人工复核为准。"
+    )
+    reported = case.get("reference_biomarkers")
+    if reported:
+        report["treatment_response"] = (
+            f"论文报告视力由 {reported['bcva_decimal'][0]} 提升至 {reported['bcva_decimal'][1]}，"
+            f"OCT 候选病灶面积由 {reported['oct']['candidate_lesion_area_mm2'][0]} 降至 {reported['oct']['candidate_lesion_area_mm2'][1]} mm²，"
+            f"OCTA CNV 候选面积由 {reported['octa']['cnv_candidate_area_mm2'][0]} 降至 {reported['octa']['cnv_candidate_area_mm2'][1]} mm²；"
+            "总体符合论文所述改善。本地分割结果存在部分方向不一致，需在原始影像上复核。"
+        )
+    else:
+        report["treatment_response"] = (
+            f"基于本地分割量化与多模态模型观察综合评估。{quantitative_change} "
+            "是否构成治疗反应必须由视网膜专科结合原始影像确认。"
+        )
+    report["quantitative_change"] = quantitative_change
+    if not isinstance(report.get("safety_triggers"), list) or not report["safety_triggers"]:
+        report["safety_triggers"] = [
+            "视力下降、视物变形或其他症状加重",
+            "新发或增加的视网膜液体、黄斑出血或其他活动性征象",
+            "眼内操作后疼痛加重、进行性视力下降或明显红眼",
+        ]
+    report.setdefault("uncertainty", case_quality.get("reason") or "所有输出均需在原始影像上由视网膜专科复核。")
     report["recommended_plan"] = selected["title"]
     report["evidence_ids"] = selected["evidence_ids"]
     report["evidence_integration"] = (
@@ -467,11 +664,43 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
         f"依据证据 {' '.join(f'[{item}]' for item in selected['evidence_ids'])}。"
         "该结论由检索证据与约束规则生成，不由语言模型自行选择。"
     )
-    if selected["id"] == "reimage_expert_review":
-        report["followup_schedule"] = (
-            "短期采用同一设备与协议复查 OCT、OCTA 和眼底彩照；"
-            "具体时间由视网膜专科结合症状、原始影像和采集质量确定。"
-        )
+    schedule_by_action = {
+        "continue_monitor": "沿用由专科确认的现有方案；具体复查时间不由系统自动设定。复查应包含视力与 OCT，必要时同步复查 OCTA 和眼底彩照。",
+        "shorten_interval": "在专科复核活动性后考虑缩短治疗间隔；具体时间、药物与剂量由处方医生决定，并用视力和 OCT 评价反应。",
+        "extend_interval": "仅在专科确认无活动后逐步评估延长间隔；若视力下降、液体或出血增加则重新评估。",
+        "switch_agent": "先复核诊断、既往治疗反应和补充影像，再由处方医生决定是否更换方案及复查时间。",
+        "reimage_expert_review": "短期采用同一设备与协议复查 OCT、OCTA 和眼底彩照；具体时间由视网膜专科结合症状、原始影像和采集质量确定。",
+    }
+    report["followup_schedule"] = schedule_by_action.get(
+        selected["id"],
+        "具体复查时间由视网膜专科结合原始影像和症状确定。",
+    )
+    state_labels = {
+        "suspected_active": "疑似仍有活动",
+        "apparently_stable": "当前影像与视力总体稳定",
+        "uncertain": "活动性尚不确定",
+    }
+    report["structured_summary"] = {
+        "case_overview": report["case_summary"],
+        "disease_state": state_labels.get(state.get("activity"), state.get("activity", "待复核")),
+        "treatment_response": report["treatment_response"],
+        "imaging_interpretation": report["imaging_interpretation"],
+        "quantitative_change": report["quantitative_change"],
+    }
+    report["recommendation"] = {
+        "selected_action": selected["title"],
+        "verdict": selected["verdict"],
+        "followup_schedule": report["followup_schedule"],
+        "evidence_integration": report["evidence_integration"],
+        "evidence_ids": selected["evidence_ids"],
+    }
+    report["procedure_plan"] = _build_procedure_plan(
+        case, state, selected, tools, model_procedure_draft, evidence
+    )
+    report["safety"] = {
+        "triggers": report["safety_triggers"],
+        "uncertainty": report["uncertainty"],
+    }
     report["consistency_validated"] = True
     trace.append({"tool": "qwen_report_synthesis", "status": "completed", "runtime_ms": report_result["runtime_ms"], "model": report_result["model"], "input_images": 0, "real_execution": True})
     return {
@@ -508,4 +737,3 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
         "runtime_ms": round((time.perf_counter() - started) * 1000, 1),
         "notice": "科研与教学用途；默认病例来自论文 Figure 3 的去标识图示。论文报告数值与本地模型输出分开保存；任何临床行动必须由有资质的眼科医生结合原始影像确认。",
     }
-

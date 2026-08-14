@@ -52,5 +52,23 @@
     "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4145443/",
     "tags": ["nAMD", "EURETINA", "anti-VEGF", "OCT", "monitoring"],
     "evidence": "Anti-VEGF management should be guided by visual function and retinal morphology, with OCT central to monitoring. Flexible and treat-and-extend approaches require repeated assessment for leakage or exudative activity."
+  },
+  {
+    "id": "E7",
+    "title": "Intravitreal injection therapy guidance",
+    "year": 2018,
+    "source": "The Royal College of Ophthalmologists",
+    "url": "https://www.rcophth.ac.uk/resources-listing/intravitreal-injection-therapy/",
+    "tags": ["intravitreal injection", "sterile", "staff competency", "environment", "complications", "procedure safety"],
+    "evidence": "Intravitreal therapy should preserve sterility from preparation to entry into the vitreous cavity, use a safe and suitable environment and equipment, and be delivered by trained staff who can recognize and manage complications and adverse events."
+  },
+  {
+    "id": "E8",
+    "title": "Intravitreal injections consent and checklist recommendations",
+    "year": 2024,
+    "source": "The Royal College of Ophthalmologists",
+    "url": "https://www.rcophth.ac.uk/resources-listing/intravitreal-injections-consent-and-checklist-recommendations/",
+    "tags": ["intravitreal injection", "consent", "day-of-treatment checklist", "site and drug record", "anti-VEGF"],
+    "evidence": "A robust consent process should document material risks. A separate day-of-treatment checklist should reference consent and the drug list, while a site-and-drug record should preserve the treated eye, treatment history, changes and rationale."
   }
 ]

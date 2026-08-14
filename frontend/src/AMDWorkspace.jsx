@@ -6,6 +6,7 @@ import {
   ChevronRight, Clock3, Database, Eye, FileCheck2, ImageIcon, LoaderCircle,
   Play, ScanLine, Server, ShieldAlert, Stethoscope, Waypoints,
 } from 'lucide-react';
+import './amd-results.css';
 
 const STEPS = [
   { id:'case', label:'病例整理', icon:Clock3 },
@@ -20,6 +21,28 @@ const VISIT_LABELS = { baseline:'V0 / 基线', followup:'V1 / 随访' };
 const MODALITIES = [
   ['oct','结构 OCT'], ['octa','OCTA'], ['fundus','眼底彩照'],
 ];
+
+const DELTA_METRICS = [
+  ['oct_fluid_area_percent','OCT 液体面积','%'],
+  ['oct_fluid_ratio_points','OCT 液体占比',' 个百分点'],
+  ['octa_vessel_density_points','OCTA 血管密度',' 个百分点'],
+  ['octa_skeleton_length_percent','OCTA 血管骨架','%'],
+  ['octa_central_avascular_area_percent','中央无血管候选区','%'],
+  ['fundus_lesion_ratio_points','彩照病灶占比',' 个百分点'],
+  ['fundus_hemorrhage_area_percent','彩照出血面积','%'],
+  ['amd_probability_points','AMD 筛查概率',' 个百分点'],
+];
+
+function showNumber(value, digits = 2) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '—';
+  return Number(value).toLocaleString('zh-CN', { maximumFractionDigits: digits });
+}
+
+function showDelta(value, unit) {
+  if (value === null || value === undefined) return '基线为 0';
+  const numeric = Number(value);
+  return `${numeric > 0 ? '+' : ''}${showNumber(numeric, 3)}${unit}`;
+}
 
 function StatusBadge({ service }) {
   const ready = service?.status === 'ready';
@@ -75,7 +98,7 @@ function AMDWorkspace({ apiUrl }) {
       <div>
         <span className="eyebrow">纵向 AMD 随访</span>
         <h1>多模态影像对比，<em>辅助随访决策。</em></h1>
-        <p>综合两次就诊的 OCT、OCTA、眼底彩照和视力变化，生成可追溯的随访建议。</p>
+        <p>对两次就诊影像进行分割与定量比较，生成可追溯的随访建议和结构化操作规划。</p>
       </div>
       <StatusBadge service={service}/>
     </section>
@@ -130,13 +153,14 @@ function AMDWorkspace({ apiUrl }) {
         <ul>
           <li><Check size={12}/>对比两次就诊的六张影像</li>
           <li><Check size={12}/>复核两次眼底彩照变化</li>
-          <li><Check size={12}/>提取影像定量指标</li>
+          <li><Check size={12}/>分割 OCT 液体、OCTA 血管与彩照病灶</li>
+          <li><Check size={12}/>比较两次就诊的定量变化</li>
           <li><Check size={12}/>检索相关随访证据</li>
-          <li><Check size={12}/>评估并选择随访方案</li>
+          <li><Check size={12}/>生成随访建议与操作规划</li>
         </ul>
         <button className="agent-run" disabled={loading || service.status !== 'ready'} onClick={runAgent}>
           {loading ? <LoaderCircle size={17}/> : <Play size={17} fill="currentColor"/>}
-          <span>{loading ? '正在分析' : service.status === 'ready' ? '开始随访分析' : '等待分析服务'}<small>{loading ? `步骤 ${progressStep+1} / ${STEPS.length}` : '预计约 40 秒'}</small></span>
+          <span>{loading ? '正在分析' : service.status === 'ready' ? '开始随访分析' : '等待分析服务'}<small>{loading ? `步骤 ${progressStep+1} / ${STEPS.length}` : '预计约 60 秒'}</small></span>
         </button>
         {loading && <div className="agent-progress"><i style={{width:`${Math.max(8,(progressStep+1)/STEPS.length*100)}%`}}/></div>}
         <p><AlertTriangle size={13}/>服务不可用时不会返回模板或随机报告。</p>
@@ -149,44 +173,95 @@ function AMDWorkspace({ apiUrl }) {
 
 function AgentResult({ result, onReset }) {
   const report = result.report || {};
+  const structured = report.structured_summary || {};
+  const recommendation = report.recommendation || {};
+  const procedure = report.procedure_plan || {};
   const visitTools = result.tool_results?.visits || {};
+  const deltas = result.tool_results?.deltas || {};
   return <motion.section className="agent-result" initial={{opacity:0,y:12}} animate={{opacity:1,y:0}}>
     <div className="decision-banner">
       <span className="decision-icon"><FileCheck2 size={24}/></span>
-      <div><small>随访建议</small><h2>{result.decision.action}</h2><p>{result.report?.recommended_plan}</p></div>
+      <div><small>随访建议</small><h2>{result.decision.action}</h2><p>{structured.treatment_response || report.recommended_plan}</p></div>
       <div className="decision-score"><small>可信度</small><strong>{result.decision.confidence_score}</strong><span>{result.decision.verdict}</span></div>
       <button onClick={onReset}>返回病例</button>
     </div>
 
     <div className="result-layout">
       <div className="result-main">
-        <section className="report-card">
-          <div className="amd-panel-head"><span><BrainCircuit size={14}/> 综合分析报告</span><b>已完成</b></div>
-          <div className="report-sections">
-            <article><small>01 / 病例摘要</small><p>{report.case_summary}</p></article>
-            <article><small>02 / 影像解读</small><p>{report.imaging_interpretation}</p></article>
-            <article><small>03 / 证据综合</small><p>{report.evidence_integration}</p></article>
-            <article><small>04 / 随访安排</small><p>{report.followup_schedule}</p></article>
+        <section className="report-card structured-report-card">
+          <div className="amd-panel-head"><span><BrainCircuit size={14}/> 结构化随访报告</span><b>已完成</b></div>
+          <div className="structured-summary-grid">
+            <article className="summary-wide"><small>病例概览</small><p>{structured.case_overview || report.case_summary}</p></article>
+            <article><small>当前状态</small><strong>{structured.disease_state || result.clinical_state?.activity}</strong></article>
+            <article><small>治疗反应</small><p>{structured.treatment_response || report.treatment_response}</p></article>
+            <article><small>影像综合</small><p>{structured.imaging_interpretation || report.imaging_interpretation}</p></article>
+            <article><small>量化变化</small><p>{structured.quantitative_change || report.quantitative_change}</p></article>
+            <article><small>随访安排</small><p>{recommendation.followup_schedule || report.followup_schedule}</p></article>
+            <article><small>证据结论</small><p>{recommendation.evidence_integration || report.evidence_integration}</p></article>
           </div>
           <div className="safety-triggers"><span><ShieldAlert size={16}/>需要升级处理的情况</span>{(report.safety_triggers || []).map((item,index)=><p key={index}>{item}</p>)}</div>
           {report.uncertainty && <p className="uncertainty"><AlertTriangle size={13}/>{report.uncertainty}</p>}
         </section>
 
-        <section className="biomarker-card">
-          <div className="amd-panel-head"><span><Activity size={14}/> 本地定量结果</span><b>辅助参考</b></div>
-          <div className="biomarker-visits">
-            {Object.entries(visitTools).map(([visit,data]) => <div key={visit}>
-              <h3>{VISIT_LABELS[visit]}</h3>
-              <div className="tool-images">
-                {['oct','octa','fundus'].map(key => <img key={key} src={data[key].overlay} alt={`${visit} ${key} output`}/>)}
-              </div>
-              <dl>
-                <div><dt>OCT 厚度代理</dt><dd>{data.oct.thickness_proxy_px} px</dd></div>
-                <div><dt>OCTA 血管密度</dt><dd>{data.octa.vessel_density_percent}%</dd></div>
-                <div><dt>眼底筛查结果</dt><dd>{data.fundus.summary}</dd></div>
-              </dl>
-            </div>)}
+        <section className="segmentation-card">
+          <div className="amd-panel-head"><span><ScanLine size={14}/> 分割、病灶定位与定量结果</span><b>真实推理</b></div>
+          <div className="segmentation-visits">
+            {Object.entries(visitTools).map(([visit,data]) => {
+              const tiles = [
+                ['OCT 层结构',data.oct.structure_overlay || data.oct.overlay],
+                ['OCT 液体',data.oct.fluid_overlay],
+                ['OCTA 血管',data.octa.overlay],
+                ['彩照病灶',data.fundus.lesion_overlay || data.fundus.overlay],
+              ];
+              const metrics = [
+                ['液体面积',data.oct.fluid_area_px,'px'],
+                ['液体占比',data.oct.fluid_ratio_percent,'%'],
+                ['液体最大高度',data.oct.max_fluid_height_px,'px'],
+                ['血管密度',data.octa.vessel_density_percent,'%'],
+                ['血管骨架',data.octa.skeleton_length_px,'px'],
+                ['分支点',data.octa.branch_points,'个'],
+                ['中央无血管候选区',data.octa.central_avascular_area_px2,'px²'],
+                ['彩照病灶占比',data.fundus.lesion_ratio_percent,'%'],
+                ['彩照出血面积',data.fundus.hemorrhage_area_px,'px'],
+              ];
+              return <article className="visit-segmentation" key={visit}>
+                <header><span>{visit === 'baseline' ? 'V0' : 'V1'}</span><div><strong>{VISIT_LABELS[visit]}</strong><small>{visit === 'baseline' ? '治疗前基线' : '治疗后随访'}</small></div></header>
+                <div className="segmentation-gallery">{tiles.map(([label,image]) => <figure key={label}><img src={image} alt={`${VISIT_LABELS[visit]} ${label}`}/><figcaption>{label}</figcaption></figure>)}</div>
+                <div className="visit-quant-grid">{metrics.map(([label,value,unit]) => <div key={label}><small>{label}</small><strong>{showNumber(value)}<em>{unit}</em></strong></div>)}</div>
+              </article>;
+            })}
           </div>
+          <div className="longitudinal-deltas">
+            <div className="delta-heading"><span><ArrowRight size={15}/>基线至随访变化</span><small>正值表示增加，负值表示减少</small></div>
+            <div>{DELTA_METRICS.map(([key,label,unit]) => <article key={key} className={Number(deltas[key]) > 0 ? 'increase' : Number(deltas[key]) < 0 ? 'decrease' : ''}><small>{label}</small><strong>{showDelta(deltas[key],unit)}</strong></article>)}</div>
+          </div>
+          <p className="segmentation-notice"><AlertTriangle size={13}/>{result.case_quality?.label}。像素指标用于同协议纵向比较，不等同于设备原生 μm、mm² 或体积测量。</p>
+        </section>
+
+        <section className="procedure-card">
+          <div className="amd-panel-head"><span><Stethoscope size={14}/> 操作 / 手术规划</span><b>{procedure.status || '待专科确认'}</b></div>
+          <div className="procedure-status"><span><FileCheck2 size={20}/></span><div><small>{procedure.title || 'AMD 操作规划草案'}</small><strong>{procedure.procedure_overview?.candidate_route}</strong></div></div>
+          <p className="planning-rationale">{procedure.planning_rationale}</p>
+          <div className="procedure-overview">
+            <article><small>术眼</small><strong>{procedure.procedure_overview?.laterality}</strong></article>
+            <article><small>目标</small><strong>{procedure.procedure_overview?.target}</strong></article>
+            <article><small>时机</small><strong>{procedure.procedure_overview?.timing}</strong></article>
+            <article><small>药物与剂量</small><strong>{procedure.procedure_overview?.drug_and_dose}</strong></article>
+          </div>
+          <div className="procedure-checklists">
+            {[
+              ['患者与影像要点',procedure.patient_specific_considerations],
+              ['操作前核查',procedure.preoperative_checks],
+              ['操作中要点',procedure.intraoperative_plan],
+              ['操作后监测',procedure.postoperative_monitoring],
+              ['升级与替代路径',procedure.escalation_and_alternatives],
+              ['必须由专科决定',procedure.required_specialist_decisions],
+            ].map(([title,items],groupIndex) => <section key={title}>
+              <h3><span>{String(groupIndex+1).padStart(2,'0')}</span>{title}</h3>
+              <ul>{(items || []).map((item,index)=><li key={index}><Check size={11}/><span>{item}</span></li>)}</ul>
+            </section>)}
+          </div>
+          <p className="procedure-notice"><ShieldAlert size={14}/>{procedure.research_notice || '规划需由有资质的视网膜专科医生确认后方可执行。'}</p>
         </section>
 
         {result.reported_reference_biomarkers && <section className="biomarker-card reported-biomarkers">

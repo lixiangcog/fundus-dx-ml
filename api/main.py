@@ -138,6 +138,13 @@ async def amd_config():
         "service": amd_agent_status(),
         "required_images": ["baseline_oct", "baseline_octa", "baseline_fundus",
                             "followup_oct", "followup_octa", "followup_fundus"],
+        "outputs": [
+            "OCT 层结构与液体分割",
+            "OCTA 血管分割与微血管定量",
+            "眼底彩照病灶定位与面积量化",
+            "基线—随访量化变化",
+            "循证随访建议与结构化操作规划",
+        ],
         "research_only": True,
     }
 

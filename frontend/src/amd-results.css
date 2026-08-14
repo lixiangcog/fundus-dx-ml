@@ -1,0 +1,324 @@
+.structured-report-card,
+.segmentation-card,
+.procedure-card {
+  border: 1px solid rgba(8, 229, 237, .15);
+  background: linear-gradient(150deg, rgba(5, 22, 27, .83), rgba(2, 11, 15, .9));
+  padding: 19px;
+}
+
+.agent-result .result-side {
+  position: sticky;
+  top: 16px;
+  align-self: start;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(8, 229, 237, .28) transparent;
+}
+
+.structured-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 13px 0 15px;
+}
+
+.structured-summary-grid article {
+  min-height: 92px;
+  border: 1px solid rgba(8, 229, 237, .1);
+  border-left: 2px solid rgba(8, 229, 237, .36);
+  background: rgba(8, 229, 237, .025);
+  padding: 13px 14px;
+}
+
+.structured-summary-grid .summary-wide {
+  grid-column: 1 / 3;
+  min-height: 74px;
+}
+
+.structured-summary-grid small {
+  display: block;
+  color: var(--cyan);
+  font-size: 9px;
+  font-weight: 600;
+  margin-bottom: 7px;
+}
+
+.structured-summary-grid strong {
+  color: #e9fcfd;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.structured-summary-grid p {
+  color: #91adb2;
+  font-size: 10px;
+  line-height: 1.8;
+  margin: 0;
+}
+
+.segmentation-visits {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.visit-segmentation {
+  border: 1px solid rgba(8, 229, 237, .13);
+  background: rgba(1, 10, 14, .66);
+  padding: 12px;
+}
+
+.visit-segmentation > header {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-bottom: 1px solid rgba(8, 229, 237, .1);
+  margin-bottom: 10px;
+}
+
+.visit-segmentation > header > span {
+  width: 31px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  background: var(--cyan);
+  color: #031015;
+  font: 700 9px 'IBM Plex Mono';
+  clip-path: polygon(0 0, 80% 0, 100% 25%, 100% 100%, 0 100%);
+}
+
+.visit-segmentation > header > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.visit-segmentation > header strong {
+  color: #dff7f9;
+  font-size: 11px;
+}
+
+.visit-segmentation > header small {
+  color: #55777e;
+  font-size: 8px;
+  margin-top: 2px;
+}
+
+.segmentation-gallery {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.segmentation-gallery figure {
+  height: 122px;
+  margin: 0;
+  border: 1px solid rgba(8, 229, 237, .12);
+  background: #02080a;
+  position: relative;
+  overflow: hidden;
+}
+
+.segmentation-gallery img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.segmentation-gallery figcaption {
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  padding: 3px 5px;
+  border-left: 2px solid var(--cyan);
+  background: rgba(2, 12, 15, .84);
+  color: #a6c6ca;
+  font-size: 7px;
+}
+
+.visit-quant-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-top: 9px;
+  border-top: 1px solid rgba(8, 229, 237, .1);
+}
+
+.visit-quant-grid > div {
+  min-height: 48px;
+  padding: 8px 7px;
+  border-right: 1px solid rgba(8, 229, 237, .08);
+  border-bottom: 1px solid rgba(8, 229, 237, .08);
+  display: flex;
+  flex-direction: column;
+}
+
+.visit-quant-grid small {
+  color: #54767d;
+  font-size: 7px;
+  line-height: 1.35;
+}
+
+.visit-quant-grid strong {
+  color: #d9f4f6;
+  font: 700 14px/1.7 'Rajdhani';
+}
+
+.visit-quant-grid em {
+  color: var(--cyan);
+  font: 500 7px 'IBM Plex Mono';
+  font-style: normal;
+  margin-left: 3px;
+}
+
+.longitudinal-deltas {
+  margin-top: 14px;
+  border: 1px solid rgba(8, 229, 237, .14);
+  background: rgba(8, 229, 237, .025);
+  padding: 12px;
+}
+
+.delta-heading {
+  height: 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid rgba(8, 229, 237, .1);
+}
+
+.delta-heading span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #b8d8db;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.delta-heading svg { color: var(--cyan); }
+.delta-heading small { color: #536f76; font-size: 8px; }
+.longitudinal-deltas > div:last-child { display: grid; grid-template-columns: repeat(4, 1fr); }
+
+.longitudinal-deltas article {
+  min-height: 57px;
+  padding: 10px 8px;
+  border-right: 1px solid rgba(8, 229, 237, .08);
+  border-bottom: 1px solid rgba(8, 229, 237, .08);
+  display: flex;
+  flex-direction: column;
+}
+
+.longitudinal-deltas article small { color: #587a81; font-size: 7px; }
+.longitudinal-deltas article strong { color: #cce7e9; font: 700 15px/1.8 'Rajdhani'; }
+.longitudinal-deltas article.decrease strong { color: #3ee7b4; }
+.longitudinal-deltas article.increase strong { color: #ffbd65; }
+
+.segmentation-notice,
+.procedure-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 12px 0 0;
+  padding: 10px 11px;
+  border-left: 2px solid #d2a54f;
+  background: rgba(255, 184, 73, .035);
+  color: #8f7d65;
+  font-size: 8px;
+  line-height: 1.7;
+}
+
+.segmentation-notice svg,
+.procedure-notice svg { flex: none; color: #e0ad59; }
+
+.procedure-status {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin: 13px 0 0;
+  padding: 12px;
+  border: 1px solid rgba(8, 229, 237, .17);
+  background: linear-gradient(90deg, rgba(8, 229, 237, .08), transparent);
+}
+
+.procedure-status > span {
+  width: 39px;
+  height: 39px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+}
+
+.procedure-status > div { display: flex; flex-direction: column; }
+.procedure-status small { color: var(--cyan); font-size: 8px; }
+.procedure-status strong { color: #e4f9fb; font-size: 11px; line-height: 1.7; margin-top: 3px; }
+
+.planning-rationale {
+  color: #8da9ae;
+  font-size: 10px;
+  line-height: 1.8;
+  margin: 12px 0;
+}
+
+.procedure-overview {
+  display: grid;
+  grid-template-columns: 105px 1.35fr 1fr 1fr;
+  border: 1px solid rgba(8, 229, 237, .13);
+}
+
+.procedure-overview article {
+  min-height: 76px;
+  padding: 11px;
+  border-right: 1px solid rgba(8, 229, 237, .1);
+  display: flex;
+  flex-direction: column;
+}
+
+.procedure-overview small { color: #55777e; font-size: 7px; margin-bottom: 7px; }
+.procedure-overview strong { color: #b9d3d6; font-size: 9px; line-height: 1.6; }
+
+.procedure-checklists {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.procedure-checklists > section {
+  border: 1px solid rgba(8, 229, 237, .11);
+  background: rgba(8, 229, 237, .018);
+  padding: 11px 12px;
+}
+
+.procedure-checklists h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #b7d3d6;
+  font-size: 10px;
+  margin: 0 0 8px;
+}
+
+.procedure-checklists h3 span { color: var(--cyan); font: 600 8px 'IBM Plex Mono'; }
+.procedure-checklists ul { list-style: none; margin: 0; padding: 0; }
+
+.procedure-checklists li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 0;
+  border-top: 1px solid rgba(8, 229, 237, .065);
+  color: #7f9da2;
+  font-size: 8px;
+  line-height: 1.65;
+}
+
+.procedure-checklists li svg { flex: none; color: var(--cyan); margin-top: 1px; }
+
+@media (max-width: 1450px) {
+  .segmentation-gallery figure { height: 108px; }
+  .procedure-overview { grid-template-columns: 90px 1.25fr 1fr 1fr; }
+  .procedure-overview article { padding: 9px; }
+}
