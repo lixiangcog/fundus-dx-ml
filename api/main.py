@@ -64,6 +64,68 @@ async def read_image(file: UploadFile) -> Image.Image:
         raise HTTPException(status_code=400, detail="无法解析上传的图像")
 
 
+def _normalize_amd_case(payload: object) -> dict:
+    """Validate user-entered longitudinal fields before GPU inference."""
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="病例信息必须是 JSON 对象")
+
+    def object_field(name: str) -> dict:
+        value = payload.get(name)
+        if not isinstance(value, dict):
+            raise HTTPException(status_code=400, detail=f"病例缺少{name}信息")
+        return value
+
+    def text_value(value: object, label: str, limit: int) -> str:
+        text = str(value or "").strip()
+        if not text:
+            raise HTTPException(status_code=400, detail=f"请填写{label}")
+        if len(text) > limit:
+            raise HTTPException(status_code=400, detail=f"{label}不能超过 {limit} 个字符")
+        return text
+
+    def number_value(value: object, label: str, minimum: float, maximum: float) -> float:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail=f"{label}必须是数字")
+        if not minimum <= number <= maximum:
+            raise HTTPException(status_code=400, detail=f"{label}应在 {minimum:g} 至 {maximum:g} 之间")
+        return number
+
+    patient = object_field("patient")
+    treatment = object_field("treatment")
+    visits = payload.get("visits")
+    if not isinstance(visits, list) or len(visits) != 2 or not all(isinstance(item, dict) for item in visits):
+        raise HTTPException(status_code=400, detail="病例必须包含基线和随访两次就诊")
+
+    normalized = dict(payload)
+    normalized["patient"] = {
+        **patient,
+        "age": int(number_value(patient.get("age"), "年龄", 18, 110)),
+        "sex": text_value(patient.get("sex"), "性别", 20),
+        "eye": text_value(patient.get("eye"), "眼别", 20),
+        "diagnosis": text_value(patient.get("diagnosis"), "诊断", 160),
+    }
+    normalized["treatment"] = {
+        **treatment,
+        "agent": text_value(treatment.get("agent"), "治疗方式", 160),
+        "injections": int(number_value(treatment.get("injections"), "治疗次数", 0, 200)),
+        "current_interval_weeks": text_value(treatment.get("current_interval_weeks"), "治疗间隔", 40),
+    }
+    normalized["context"] = text_value(payload.get("context"), "病例记录", 1200)
+    normalized["visits"] = [
+        {
+            **visit,
+            "id": text_value(visit.get("id") or f"V{index}", "就诊编号", 20),
+            "label": text_value(visit.get("label") or ("基线" if index == 0 else "随访"), "就诊名称", 40),
+            "date": text_value(visit.get("date"), "就诊日期", 40),
+            "bcva_decimal": number_value(visit.get("bcva_decimal"), "视力", 0, 2),
+        }
+        for index, visit in enumerate(visits)
+    ]
+    return normalized
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "model_loaded": model is not None, "device": str(device),
@@ -208,9 +270,9 @@ async def analyze_amd(
     followup_octa: UploadFile = File(...), followup_fundus: UploadFile = File(...),
 ):
     try:
-        case = json.loads(case_json)
+        case = _normalize_amd_case(json.loads(case_json))
     except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail=f"?? JSON ????: {exc.msg}")
+        raise HTTPException(status_code=400, detail=f"病例 JSON 格式无效：{exc.msg}")
     upload_dir = PROJECT_ROOT / "runtime" / "amd_uploads" / uuid.uuid4().hex
     upload_dir.mkdir(parents=True, exist_ok=False)
     uploads = {

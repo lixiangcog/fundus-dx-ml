@@ -200,3 +200,20 @@ main{padding-top:32px}
   .metric-list strong,.systemic-metric-list strong{font-size:26px}
   .report-sections p,.structured-summary-grid p{font-size:13px}
 }
+
+/* AMD 可编辑病例与影像输入 */
+.case-reset{color:#6d28ff;border:1px solid #ded7ff;border-radius:8px;padding:5px 7px;background:#f7f4ff}
+.case-reset:hover{background:#eee8ff;border-color:#bba9ff}
+.case-editor{border-top:1px solid #e8e5f0;padding-top:16px}
+.case-field>span,.visit-fields small{color:#656678;font-size:10px}
+.case-field input,.case-field select,.case-field textarea,.visit-fields input{border-color:#dedbe9;background:#f8f7fc;color:#252633;font-size:12px}
+.case-field input:hover,.case-field select:hover,.case-field textarea:hover,.visit-fields input:hover{border-color:#c8c1df}
+.case-field input:focus,.case-field select:focus,.case-field textarea:focus,.visit-fields input:focus{border-color:#7a2cff;background:#fff;box-shadow:0 0 0 3px rgba(122,44,255,.1)}
+.case-field textarea{min-height:96px}
+.visit-title.editable{height:62px}
+.visit-fields input{height:26px;font-size:11px}
+.visit-image.editable{background:#373849}
+.visit-image.editable.uploaded{border-color:#7a2cff;box-shadow:0 0 0 2px rgba(122,44,255,.12)}
+.visit-upload{border-color:rgba(176,151,255,.7);background:rgba(38,35,55,.9);color:#fff}
+.visit-upload:hover{border-color:#b69cff}
+.visit-upload small{color:#d3cdec}

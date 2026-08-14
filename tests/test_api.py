@@ -1,11 +1,14 @@
+import copy
 import io
 import math
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from api.main import app
+from api.amd_agent import DEFAULT_CASE
+from api.main import _normalize_amd_case, app
 from shared import CLASS_NAMES
 
 client = TestClient(app)
@@ -144,6 +147,38 @@ def test_amd_config_declares_dual_specialist_runtime():
     assert case["visits"][0]["bcva_decimal"] == 0.3
     assert case["visits"][1]["bcva_decimal"] == 0.5
     assert case["image_quality"]["status"] == "review"
+
+
+def test_custom_amd_case_fields_are_normalized_for_inference():
+    case = copy.deepcopy(DEFAULT_CASE)
+    case["patient"]["age"] = "79"
+    case["treatment"]["injections"] = "6"
+    case["visits"][1]["bcva_decimal"] = "0.55"
+    case["context"] = "用户输入的纵向 AMD 随访记录"
+
+    normalized = _normalize_amd_case(case)
+
+    assert normalized["patient"]["age"] == 79
+    assert normalized["treatment"]["injections"] == 6
+    assert normalized["visits"][1]["bcva_decimal"] == pytest.approx(0.55)
+    assert normalized["context"] == "用户输入的纵向 AMD 随访记录"
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (lambda case: case["patient"].update(age=12), "年龄"),
+        (lambda case: case.update(visits=case["visits"][:1]), "两次就诊"),
+        (lambda case: case["visits"][0].update(bcva_decimal=3), "视力"),
+        (lambda case: case.update(context=""), "病例记录"),
+    ],
+)
+def test_custom_amd_case_rejects_invalid_fields(mutate, message):
+    case = copy.deepcopy(DEFAULT_CASE)
+    mutate(case)
+    with pytest.raises(HTTPException) as error:
+        _normalize_amd_case(case)
+    assert message in error.value.detail
 
 
 def test_systemic_config_exposes_three_real_modules():

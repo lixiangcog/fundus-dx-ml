@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
 import {
   Activity, AlertTriangle, ArrowRight, BookOpen, BrainCircuit, Check,
   ChevronRight, Clock3, Database, Eye, FileCheck2, ImageIcon, LoaderCircle,
-  Play, ScanLine, Server, ShieldAlert, Stethoscope, Waypoints,
+  Play, RotateCcw, ScanLine, Server, ShieldAlert, Stethoscope, UploadCloud,
+  Waypoints,
 } from 'lucide-react';
 import ModuleLog from './ModuleLog';
 import { useModuleLog } from './useModuleLog';
@@ -23,6 +24,24 @@ const VISIT_LABELS = { baseline:'V0 / 基线', followup:'V1 / 随访' };
 const MODALITIES = [
   ['oct','结构 OCT'], ['octa','OCTA'], ['fundus','眼底彩照'],
 ];
+
+const IMAGE_FIELDS = [
+  ['baseline_oct', 0, 'oct'], ['baseline_octa', 0, 'octa'], ['baseline_fundus', 0, 'fundus'],
+  ['followup_oct', 1, 'oct'], ['followup_octa', 1, 'octa'], ['followup_fundus', 1, 'fundus'],
+];
+const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+
+function cloneCase(value) {
+  return value ? JSON.parse(JSON.stringify(value)) : null;
+}
+
+function defaultImageState(caseData) {
+  return Object.fromEntries(IMAGE_FIELDS.map(([field, visitIndex, modality]) => [field, {
+    file: null,
+    preview: caseData?.visits?.[visitIndex]?.images?.[modality] || '',
+    isDefault: true,
+  }]));
+}
 
 const DELTA_METRICS = [
   ['oct_fluid_area_percent','OCT 液体面积','%'],
@@ -73,13 +92,20 @@ function AMDWorkspace({ apiUrl }) {
   const [loading, setLoading] = useState(false);
   const [progressStep, setProgressStep] = useState(0);
   const [error, setError] = useState('');
+  const [caseData, setCaseData] = useState(null);
+  const [caseDirty, setCaseDirty] = useState(false);
+  const [caseImages, setCaseImages] = useState({});
+  const caseImagesRef = useRef({});
   const { entries: amdLogs, write: writeAmdLog, writeMany: writeAmdLogs, clear: clearAmdLog } = useModuleLog('AMD 随访');
-  const caseData = config?.default_case;
+  const hasCustomImages = useMemo(() => Object.values(caseImages).some((image) => image?.file), [caseImages]);
 
   const refreshStatus = useCallback(() => fetch(`${apiUrl}/amd-agent/status`).then(r => r.json()).then(setService).catch(() => setService({status:'offline'})), [apiUrl]);
   useEffect(() => {
     fetch(`${apiUrl}/amd-agent/config`).then(r => r.json()).then((data) => {
       setConfig(data); setService(data.service);
+      const initialCase = cloneCase(data.default_case);
+      setCaseData(initialCase);
+      setCaseImages(defaultImageState(initialCase));
       writeAmdLogs([
         { level:'command', channel:'SHELL', message:'fundus-dx amd status --case default' },
         { level:'success', channel:'INPUT', message:'visits=2; images=6', detail:'modalities=OCT,OCTA,FUNDUS' },
@@ -90,10 +116,71 @@ function AMDWorkspace({ apiUrl }) {
     return () => clearInterval(timer);
   }, [apiUrl, refreshStatus, writeAmdLog, writeAmdLogs]);
 
+  useEffect(() => { caseImagesRef.current = caseImages; }, [caseImages]);
+  useEffect(() => () => {
+    Object.values(caseImagesRef.current).forEach((image) => {
+      if (image?.file && image.preview) URL.revokeObjectURL(image.preview);
+    });
+  }, []);
+
+  const updatePatient = (field, value) => {
+    setCaseData((current) => ({...current, patient:{...current.patient, [field]:value}}));
+    setCaseDirty(true);
+  };
+
+  const updateTreatment = (field, value) => {
+    setCaseData((current) => ({...current, treatment:{...current.treatment, [field]:value}}));
+    setCaseDirty(true);
+  };
+
+  const updateVisit = (index, field, value) => {
+    setCaseData((current) => ({...current, visits:current.visits.map((visit, visitIndex) => (
+      visitIndex === index ? {...visit, [field]:value} : visit
+    ))}));
+    setCaseDirty(true);
+  };
+
+  const updateContext = (value) => {
+    setCaseData((current) => ({...current, context:value}));
+    setCaseDirty(true);
+  };
+
+  const updateImage = (field, file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setError('请选择 JPG、PNG 或 WebP 图像。');
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setError('单张影像不能超过 12 MB。');
+      return;
+    }
+    const preview = URL.createObjectURL(file);
+    setCaseImages((current) => {
+      if (current[field]?.file && current[field].preview) URL.revokeObjectURL(current[field].preview);
+      return {...current, [field]:{file, preview, isDefault:false}};
+    });
+    setError('');
+  };
+
+  const restoreDefaultCase = () => {
+    const restored = cloneCase(config?.default_case);
+    if (!restored) return;
+    setCaseData(restored);
+    setCaseImages((current) => {
+      Object.values(current).forEach((image) => {
+        if (image?.file && image.preview) URL.revokeObjectURL(image.preview);
+      });
+      return defaultImageState(restored);
+    });
+    setCaseDirty(false);
+    setError('');
+    writeAmdLog('info', '恢复默认病例与六张影像', '所有可编辑字段已重置', 'INPUT');
+  };
+
   useEffect(() => {
     if (!loading) return;
     // Reset the staged progress animation when a new analysis starts.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProgressStep(0);
     writeAmdLog('run', 'stage=01; case_context ready', '开始组织两次就诊记录', 'PIPELINE');
     const timers = [2200, 6500, 12500, 17000, 22000].map((delay, index) => setTimeout(() => {
@@ -105,16 +192,38 @@ function AMDWorkspace({ apiUrl }) {
   }, [loading, writeAmdLog]);
 
   const runAgent = async () => {
-    if (loading || service.status !== 'ready') return;
+    if (loading || service.status !== 'ready' || !caseData) return;
     setLoading(true); setResult(null); setError('');
+    const inputMode = caseDirty || hasCustomImages ? 'custom' : 'default';
     writeAmdLogs([
-      { level:'command', channel:'SHELL', message:'fundus-dx amd run --case default --device cuda:0' },
-      { level:'info', channel:'INPUT', message:'validating six de-identified images', detail:'baseline=3; followup=3' },
+      { level:'command', channel:'SHELL', message:`fundus-dx amd run --case ${inputMode} --device cuda:0` },
+      { level:'info', channel:'INPUT', message:'validating case fields and six images', detail:`source=${inputMode}; baseline=3; followup=3` },
       { level:'run', channel:'QUEUE', message:'multimodal job accepted', detail:'quantification -> comparison -> retrieval -> report' },
       { level:'run', channel:'CUDA', message:'GPU tools dispatched', detail:'real_inference=true; fallback=false' },
     ]);
     try {
-      const response = await axios.post(`${apiUrl}/amd-agent/analyze-default`);
+      const submittedCase = cloneCase(caseData);
+      if (caseDirty || hasCustomImages) {
+        delete submittedCase.reference_biomarkers;
+        delete submittedCase.image_quality;
+        submittedCase.evidence_origin = 'user_supplied';
+        submittedCase.research_demo = false;
+      }
+      const body = new FormData();
+      body.append('case_json', JSON.stringify(submittedCase));
+      for (const [field] of IMAGE_FIELDS) {
+        const current = caseImages[field];
+        if (current?.file) {
+          body.append(field, current.file, current.file.name);
+          continue;
+        }
+        const imageUrl = current?.preview || '';
+        const response = await fetch(imageUrl.startsWith('http') ? imageUrl : `${apiUrl}${imageUrl}`);
+        if (!response.ok) throw new Error(`无法读取默认影像：${field}`);
+        const blob = await response.blob();
+        body.append(field, new File([blob], `${field}.png`, {type:blob.type || 'image/png'}));
+      }
+      const response = await axios.post(`${apiUrl}/amd-agent/analyze`, body);
       setResult(response.data);
       setProgressStep(STEPS.length - 1);
       setService((current) => ({...current,status:'ready'}));
@@ -130,14 +239,14 @@ function AMDWorkspace({ apiUrl }) {
         return { level:item.status === 'completed' ? 'success' : 'warning', channel:'TOOL', message:`${item.tool} -> ${item.status}`, detail };
       });
       writeAmdLogs([
-        { level:'success', channel:'HTTP', message:'POST /amd-agent/analyze-default -> 200 OK', detail:`run_id=${output.run_id}` },
+        { level:'success', channel:'HTTP', message:'POST /amd-agent/analyze -> 200 OK', detail:`run_id=${output.run_id}; source=${inputMode}` },
         ...traceRows,
         { level:output.report?.consistency_validated ? 'success' : 'warning', channel:'REPORT', message:`structured_report=${Boolean(output.report)}; consistency=${Boolean(output.report?.consistency_validated)}`, detail:`decision=${output.decision?.action_id || 'review'}` },
         { level:'success', channel:'DONE', message:'AMD longitudinal analysis completed', detail:`runtime_ms=${output.runtime_ms}; tools=${traceRows.length}` },
       ]);
     } catch (requestError) {
       setError(requestError.response?.data?.detail || '分析未完成，请检查服务状态后重试。');
-      writeAmdLog('error', `POST /amd-agent/analyze-default -> ${requestError.response?.status || 'NETWORK_ERROR'}`, requestError.response?.data?.detail || '分析服务未返回完整结果', 'HTTP');
+      writeAmdLog('error', `POST /amd-agent/analyze -> ${requestError.response?.status || 'NETWORK_ERROR'}`, requestError.response?.data?.detail || requestError.message || '分析服务未返回完整结果', 'HTTP');
       refreshStatus();
     } finally { setLoading(false); }
   };
@@ -164,17 +273,27 @@ function AMDWorkspace({ apiUrl }) {
       })}
     </section>
 
-    {!result ? <section className="amd-console">
+    {!result ? <section className="amd-console amd-input-console">
       <aside className="case-context">
-        <div className="amd-panel-head"><span><Stethoscope size={14}/> 病例信息</span></div>
+        <div className="amd-panel-head">
+          <span><Stethoscope size={14}/> 病例信息</span>
+          <button type="button" className="case-reset" onClick={restoreDefaultCase}><RotateCcw size={12}/>恢复默认</button>
+        </div>
         {caseData ? <>
-          <dl className="case-facts">
-            <div><dt>患者</dt><dd>{caseData.patient.age} 岁 / {caseData.patient.sex} / {caseData.patient.eye}</dd></div>
-            <div><dt>诊断</dt><dd>{caseData.patient.diagnosis}</dd></div>
-            <div><dt>治疗</dt><dd>{caseData.treatment.agent} / {caseData.treatment.injections} 次</dd></div>
-            <div><dt>治疗间隔</dt><dd>{caseData.treatment.current_interval_weeks}</dd></div>
-          </dl>
-          <p className="case-narrative">{caseData.context}</p>
+          <div className="case-editor">
+            <div className="case-field-row triple">
+              <label className="case-field"><span>年龄</span><input type="number" min="18" max="110" value={caseData.patient.age} onChange={(event) => updatePatient('age', event.target.value)} /></label>
+              <label className="case-field"><span>性别</span><select value={caseData.patient.sex} onChange={(event) => updatePatient('sex', event.target.value)}><option>女</option><option>男</option><option>其他</option></select></label>
+              <label className="case-field"><span>眼别</span><select value={caseData.patient.eye} onChange={(event) => updatePatient('eye', event.target.value)}><option>右眼</option><option>左眼</option><option>双眼</option></select></label>
+            </div>
+            <label className="case-field"><span>诊断</span><input value={caseData.patient.diagnosis} maxLength={160} onChange={(event) => updatePatient('diagnosis', event.target.value)} /></label>
+            <label className="case-field"><span>治疗方式</span><input value={caseData.treatment.agent} maxLength={160} onChange={(event) => updateTreatment('agent', event.target.value)} /></label>
+            <div className="case-field-row">
+              <label className="case-field"><span>治疗次数</span><input type="number" min="0" max="200" value={caseData.treatment.injections} onChange={(event) => updateTreatment('injections', event.target.value)} /></label>
+              <label className="case-field"><span>治疗间隔</span><input value={caseData.treatment.current_interval_weeks} maxLength={40} onChange={(event) => updateTreatment('current_interval_weeks', event.target.value)} /></label>
+            </div>
+            <label className="case-field"><span>病例记录</span><textarea rows="4" maxLength={1200} value={caseData.context} onChange={(event) => updateContext(event.target.value)} /></label>
+          </div>
         </> : <div className="case-loading"><LoaderCircle size={20}/>正在加载病例</div>}
       </aside>
 
@@ -182,11 +301,21 @@ function AMDWorkspace({ apiUrl }) {
         <div className="amd-panel-head"><span><ImageIcon size={14}/> 多模态随访影像</span></div>
         <div className="visit-grid">
           {(caseData?.visits || []).map((visit,index) => <div className="visit-column" key={visit.id}>
-            <div className="visit-title"><span>{visit.id}</span><div><b>{visit.label}</b><small>{visit.date} / 视力 {visit.bcva_decimal}</small></div></div>
-            {MODALITIES.map(([key,label]) => <div className="visit-image" key={key}>
-              <img src={visit.images[key]} alt={`${visit.label} ${key}`}/>
-              <span>{label}</span><i/>
-            </div>)}
+            <div className="visit-title editable"><span>{visit.id}</span><div><b>{visit.label}</b><div className="visit-fields">
+              <label><small>日期</small><input type="month" value={visit.date} onChange={(event) => updateVisit(index, 'date', event.target.value)} /></label>
+              <label><small>视力</small><input type="number" min="0" max="2" step="0.01" value={visit.bcva_decimal} onChange={(event) => updateVisit(index, 'bcva_decimal', event.target.value)} /></label>
+            </div></div></div>
+            {MODALITIES.map(([key,label]) => {
+              const field = `${index === 0 ? 'baseline' : 'followup'}_${key}`;
+              const image = caseImages[field];
+              return <div className={`visit-image editable ${image?.file ? 'uploaded' : ''}`} key={key}>
+                <img src={image?.preview || visit.images[key]} alt={`${visit.label} ${key}`}/>
+                <span>{label}</span><i/>
+                <label className="visit-upload"><UploadCloud size={13}/><b>{image?.file ? '更换影像' : '上传替换'}</b><small>{image?.file ? image.file.name : '当前为默认影像'}</small>
+                  <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { updateImage(field, event.target.files?.[0]); event.target.value = ''; }} />
+                </label>
+              </div>;
+            })}
             {index === 0 && <div className="visit-arrow"><ArrowRight size={17}/><small>3 个月</small></div>}
           </div>)}
         </div>
@@ -212,7 +341,10 @@ function AMDWorkspace({ apiUrl }) {
         {loading && <div className="agent-progress"><i style={{width:`${Math.max(8,(progressStep+1)/STEPS.length*100)}%`}}/></div>}
         <p><AlertTriangle size={13}/>服务不可用时不会返回模板或随机报告。</p>
       </aside>
-    </section> : <AgentResult result={result} onReset={() => { setResult(null); writeAmdLog('info', '返回 AMD 默认病例', '保留本次运行日志'); }}/>}
+    </section> : <AgentResult
+      result={result}
+      onReset={() => { setResult(null); writeAmdLog('info', '返回病例编辑', '保留本次输入与运行日志'); }}
+    />}
 
     <ModuleLog title="AMD 随访" entries={amdLogs} onClear={clearAmdLog} running={loading}/>
     {error && <div className="error-banner amd-error"><AlertTriangle size={16}/>{error}</div>}
