@@ -54,7 +54,7 @@ def infer(task: str, image_path: Path) -> dict[str, Any]:
         },
     )
     try:
-        with NO_PROXY_OPENER.open(request, timeout=180) as response:
+        with NO_PROXY_OPENER.open(request, timeout=420) as response:
             result = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")

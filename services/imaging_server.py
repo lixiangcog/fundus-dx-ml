@@ -2,9 +2,14 @@
 from __future__ import annotations
 
 import base64
+import csv
 import json
 import os
+import shutil
 import socket
+import subprocess
+import sys
+import tempfile
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -14,12 +19,14 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
+import torch.nn as nn
 from fastapi import FastAPI, Header, HTTPException
 from monai.networks.nets import DynUNet, UNet
 from PIL import Image
 from pydantic import BaseModel, Field
 from safetensors.torch import load_file
 import torchseg
+from torchvision import models, transforms
 
 from services.oct_ddpm import OCTDiffusionDenoiser
 
@@ -32,8 +39,15 @@ FUNDUS_CHECKPOINT = PROJECT_ROOT / "models/fundus-lesions/model.safetensors"
 OCTA_CHECKPOINT = PROJECT_ROOT / "models/octa-vessels/30_model.pth"
 OCT_CHECKPOINT = PROJECT_ROOT / "models/oct-structure/duke_unet_v1.pth"
 OCT_ENHANCEMENT_CHECKPOINT = PROJECT_ROOT / "models/oct-enhancement/DDPM_oct_dataset2_2021-07-08.pt"
+EYE_AGE_CHECKPOINT = PROJECT_ROOT / "models/eye-age/resnet101-nonfiltered.pth"
+VASCX_MODEL_DIR = PROJECT_ROOT / "models/vascx"
+VASCX_BIN = Path(sys.executable).with_name("vascx")
 INFERENCE_LOCK = threading.Lock()
-MODELS: dict[str, torch.nn.Module] = {}
+MODELS: dict[str, object] = {}
+READY_TASKS = {
+    "fundus_lesions", "octa_vessels", "oct_structure", "oct_enhancement",
+    "eye_age", "retinal_vascular",
+}
 
 FUNDUS_NAMES = ["BG", "CTW", "EX", "HE", "MA"]
 FUNDUS_COLORS = np.array(
@@ -52,7 +66,7 @@ IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
 
 class ImagingRequest(BaseModel):
     image: str = Field(min_length=1)
-    task: str = Field(pattern="^(fundus_lesions|octa_vessels|oct_structure|oct_enhancement)$")
+    task: str = Field(pattern="^(fundus_lesions|octa_vessels|oct_structure|oct_enhancement|eye_age|retinal_vascular)$")
 
 
 def _token() -> str:
@@ -65,7 +79,7 @@ def _write_status(status: str, detail: str = "") -> None:
         "status": status,
         "host": socket.gethostname(),
         "port": PORT,
-        "model": "Fundus U-Net + OCTA DynUNet + Duke OCT U-Net + OCT diffusion enhancement",
+        "model": "Six calibrated ophthalmic imaging tasks",
         "job_id": os.getenv("SLURM_JOB_ID", ""),
         "updated_at": time.time(),
         "detail": detail,
@@ -84,7 +98,12 @@ def _build_oct() -> UNet:
 def _load() -> None:
     missing = [
         str(path) for path in
-        (FUNDUS_CHECKPOINT, OCTA_CHECKPOINT, OCT_CHECKPOINT, OCT_ENHANCEMENT_CHECKPOINT)
+        (
+            FUNDUS_CHECKPOINT, OCTA_CHECKPOINT, OCT_CHECKPOINT, OCT_ENHANCEMENT_CHECKPOINT,
+            EYE_AGE_CHECKPOINT, VASCX_MODEL_DIR / "artery_vein/av.pt",
+            VASCX_MODEL_DIR / "vessels/vessels.pt", VASCX_MODEL_DIR / "disc/disc.pt",
+            VASCX_MODEL_DIR / "fovea/fovea.pt", VASCX_BIN,
+        )
         if not path.is_file()
     ]
     if missing:
@@ -112,9 +131,22 @@ def _load() -> None:
     oct_model.eval().cuda()
     oct_enhancement = OCTDiffusionDenoiser(OCT_ENHANCEMENT_CHECKPOINT, timestep=14)
     oct_enhancement.eval().cuda()
+
+    eye_age_checkpoint = torch.load(EYE_AGE_CHECKPOINT, map_location="cpu", weights_only=False)
+    eye_age = models.resnet101(weights=None)
+    eye_age.fc = nn.Sequential(
+        nn.Linear(2048, 512), nn.BatchNorm1d(512, momentum=0.1), nn.ReLU(inplace=True),
+        nn.Dropout(0.4), nn.Linear(512, 128), nn.BatchNorm1d(128, momentum=0.1),
+        nn.ReLU(inplace=True), nn.Dropout(0.3), nn.Linear(128, 1),
+    )
+    eye_age.load_state_dict(eye_age_checkpoint["model_state_dict"])
+    eye_age.eval().cuda()
+    eye_age.age_mean = float(eye_age_checkpoint["mean_age"])
+    eye_age.age_std = float(eye_age_checkpoint["std_age"])
     MODELS.update(
         fundus_lesions=fundus, octa_vessels=octa,
-        oct_structure=oct_model, oct_enhancement=oct_enhancement,
+        oct_structure=oct_model, oct_enhancement=oct_enhancement, eye_age=eye_age,
+        retinal_vascular=True,
     )
 
 
@@ -228,6 +260,166 @@ def _oct_enhancement_infer(image: Image.Image) -> dict:
     }
 
 
+def _crop_eye_age(image: Image.Image, size: int = 224) -> np.ndarray:
+    rgb = np.asarray(image.convert("RGB"))
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    points = cv2.findNonZero(np.uint8(gray > 25) * 255)
+    if points is None:
+        raise HTTPException(status_code=400, detail="No retinal field of view detected")
+    x, y, width, height = cv2.boundingRect(points)
+    scale = size / max(width, height)
+    region = rgb[y:y + height, x:x + width]
+    resized = cv2.resize(
+        region, (max(1, round(width * scale)), max(1, round(height * scale))),
+        interpolation=cv2.INTER_LANCZOS4,
+    )
+    canvas = np.zeros((size, size, 3), dtype=np.uint8)
+    top = (size - resized.shape[0]) // 2
+    left = (size - resized.shape[1]) // 2
+    canvas[top:top + resized.shape[0], left:left + resized.shape[1]] = resized
+    return canvas
+
+
+def _eye_age_infer(image: Image.Image) -> dict:
+    fitted = _crop_eye_age(image)
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    ])
+    tensor = transform(Image.fromarray(fitted))[None].cuda()
+    model = MODELS["eye_age"]
+    activations: list[torch.Tensor] = []
+    gradients: list[torch.Tensor] = []
+    forward_handle = model.layer4[-1].register_forward_hook(
+        lambda _module, _inputs, output: activations.append(output)
+    )
+    backward_handle = model.layer4[-1].register_full_backward_hook(
+        lambda _module, _grad_input, grad_output: gradients.append(grad_output[0])
+    )
+    try:
+        model.zero_grad(set_to_none=True)
+        normalized_age = model(tensor)[0, 0]
+        normalized_age.backward()
+        activation = activations[0].detach()[0]
+        gradient = gradients[0].detach()[0]
+    finally:
+        forward_handle.remove()
+        backward_handle.remove()
+    weights = gradient.mean(dim=(1, 2), keepdim=True)
+    heatmap = torch.relu((weights * activation).sum(dim=0)).cpu().numpy()
+    heatmap -= float(heatmap.min())
+    heatmap /= max(float(heatmap.max()), 1e-8)
+    heatmap = cv2.resize(heatmap, (224, 224), interpolation=cv2.INTER_CUBIC)
+    colored = cv2.cvtColor(cv2.applyColorMap(np.uint8(heatmap * 255), cv2.COLORMAP_TURBO), cv2.COLOR_BGR2RGB)
+    overlay = cv2.addWeighted(fitted, 0.66, colored, 0.34, 0)
+    prediction = float(normalized_age.detach().cpu()) * model.age_std + model.age_mean
+    gray = cv2.cvtColor(fitted, cv2.COLOR_RGB2GRAY)
+    field = gray > 25
+    return {
+        "model": "Retinal age ResNet101 non-filtered",
+        "predicted_age": round(prediction, 2),
+        "overlay_png": _png64(overlay),
+        "preprocessed_png": _png64(fitted),
+        "heatmap_png": _png64(np.uint8(heatmap * 255), "L"),
+        "quality": {
+            "field_coverage_percent": round(float(field.mean() * 100), 1),
+            "sharpness": round(float(cv2.Laplacian(gray, cv2.CV_64F).var()), 1),
+            "status": "passed" if field.mean() >= 0.45 else "review",
+        },
+    }
+
+
+def _read_one_row(path: Path) -> dict[str, float | None]:
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        row = next(csv.DictReader(handle))
+    row.pop("", None)
+    result: dict[str, float | None] = {}
+    for key, value in row.items():
+        try:
+            parsed = float(value)
+            result[key] = parsed if np.isfinite(parsed) else None
+        except (TypeError, ValueError):
+            result[key] = None
+    return result
+
+
+def _retinal_vascular_infer(image: Image.Image) -> dict:
+    work_root = RUNTIME_DIR / "systemic_gpu"
+    work_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="vascx-", dir=work_root) as temporary:
+        work = Path(temporary)
+        inputs = work / "input"
+        output = work / "output"
+        inputs.mkdir()
+        image.save(inputs / "case.png", format="PNG")
+        command = [
+            str(VASCX_BIN), "run-models", str(inputs), str(output),
+            "--no-quality", "--no-overlay", "--device", "cuda:0", "--n-jobs", "1",
+            "--av-model", str(VASCX_MODEL_DIR / "artery_vein/av.pt"),
+            "--vessels-model", str(VASCX_MODEL_DIR / "vessels/vessels.pt"),
+            "--disc-model", str(VASCX_MODEL_DIR / "disc/disc.pt"),
+            "--fovea-model", str(VASCX_MODEL_DIR / "fovea/fovea.pt"),
+        ]
+        run = subprocess.run(command, cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=180)
+        if run.returncode:
+            raise RuntimeError(f"Vascular model pipeline failed: {run.stderr[-1200:]}")
+        biomarker_csv = work / "biomarkers.csv"
+        quantify = subprocess.run(
+            [str(VASCX_BIN), "calc-biomarkers", str(output), str(biomarker_csv),
+             "--feature_set", "full_v3", "--n-jobs", "1"],
+            cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=120,
+        )
+        if quantify.returncode:
+            raise RuntimeError(f"Vascular quantification failed: {quantify.stderr[-1200:]}")
+
+        base = np.asarray(Image.open(output / "preprocessed_rgb/case.png").convert("RGB"))
+        vessels = np.asarray(Image.open(output / "vessels/case.png").convert("L")) > 0
+        artery_vein = np.asarray(Image.open(output / "artery_vein/case.png").convert("L"))
+        disc_small = np.asarray(Image.open(output / "disc/case.png").convert("L")) > 0
+        disc = cv2.resize(np.uint8(disc_small), (base.shape[1], base.shape[0]), interpolation=cv2.INTER_NEAREST) > 0
+        with (output / "fovea.csv").open("r", encoding="utf-8", newline="") as handle:
+            fovea_row = next(csv.DictReader(handle))
+        fovea = (round(float(fovea_row["x_fovea"])), round(float(fovea_row["y_fovea"])))
+
+        tint = base.copy()
+        tint[artery_vein == 1] = (255, 75, 76)
+        tint[artery_vein == 2] = (69, 146, 255)
+        tint[artery_vein == 3] = (0, 225, 204)
+        overlay = cv2.addWeighted(base, 0.63, tint, 0.52, 0)
+        contours, _ = cv2.findContours(np.uint8(disc), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(overlay, contours, -1, (255, 238, 95), 3)
+        cv2.circle(overlay, fovea, 10, (255, 255, 255), 2)
+        cv2.circle(overlay, fovea, 3, (255, 238, 95), -1)
+
+        biomarkers = _read_one_row(biomarker_csv)
+        field = base.max(axis=2) > 25
+        gray = cv2.cvtColor(base, cv2.COLOR_RGB2GRAY)
+        checks = {
+            "retinal_field": bool(field.mean() >= 0.45),
+            "vessel_map": bool(vessels.sum() >= 2000),
+            "optic_disc": bool(disc.sum() >= 400),
+            "fovea": bool(0 <= fovea[0] < base.shape[1] and 0 <= fovea[1] < base.shape[0]),
+        }
+        return {
+            "model": "VascX full_v3",
+            "overlay_png": _png64(overlay),
+            "preprocessed_png": _png64(base),
+            "vessels_png": _png64(np.uint8(vessels) * 255, "L"),
+            "artery_vein_png": _png64(artery_vein, "L"),
+            "disc_png": _png64(np.uint8(disc) * 255, "L"),
+            "fovea": [fovea[0], fovea[1]],
+            "biomarkers": biomarkers,
+            "quality": {
+                "status": "passed" if all(checks.values()) else "review",
+                "checks": checks,
+                "completed_checks": sum(checks.values()),
+                "field_coverage_percent": round(float(field.mean() * 100), 1),
+                "sharpness": round(float(cv2.Laplacian(gray, cv2.CV_64F).var()), 1),
+                "vessel_pixels": int(vessels.sum()),
+            },
+        }
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     _write_status("loading")
@@ -247,7 +439,7 @@ app = FastAPI(title="RetinaScope calibrated imaging service", version="1.0.0", l
 @app.get("/health")
 def health():
     return {
-        "status": "ready" if len(MODELS) == 4 else "loading",
+        "status": "ready" if READY_TASKS.issubset(MODELS) else "loading",
         "models": sorted(MODELS), "device": "cuda",
         "job_id": os.getenv("SLURM_JOB_ID", ""),
     }
@@ -268,6 +460,8 @@ def infer(request: ImagingRequest, x_agent_token: str = Header(default="")):
             "octa_vessels": _octa_infer,
             "oct_structure": _oct_infer,
             "oct_enhancement": _oct_enhancement_infer,
+            "eye_age": _eye_age_infer,
+            "retinal_vascular": _retinal_vascular_infer,
         }[request.task](image)
     return {
         "task": request.task, **result,

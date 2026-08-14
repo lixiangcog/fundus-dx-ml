@@ -23,8 +23,10 @@ from api.imaging_client import status as imaging_status
 from api.samples import get_pipeline_reference, get_sample, public_catalog
 from api.amd_agent import DEFAULT_CASE, public_status as amd_agent_status
 from api.amd_agent import run_case as run_amd_case, run_default_case as run_default_amd_case
+from api.systemic import SYSTEMIC_MODULES, public_config as systemic_public_config
+from api.systemic import run_module as run_systemic_module, sample_path as systemic_sample_path
 
-APP_VERSION = "4.0.0"
+APP_VERSION = "5.0.0"
 MAX_UPLOAD_BYTES = 12 * 1024 * 1024
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
@@ -73,6 +75,42 @@ async def health():
 async def capabilities():
     return {"modalities": ["OCT", "OCTA", "眼底彩照"], "capabilities": CAPABILITIES,
             "samples": public_catalog(), "research_only": True, "version": APP_VERSION}
+
+
+@app.get("/systemic/config")
+async def systemic_config():
+    return {"modules": systemic_public_config(), "research_only": True, "version": APP_VERSION}
+
+
+@app.get("/systemic/sample/{module_id}")
+async def systemic_sample(module_id: str):
+    path = systemic_sample_path(module_id)
+    if path is None or not path.is_file():
+        raise HTTPException(status_code=404, detail="研究样本不存在")
+    return FileResponse(path, headers={"Cache-Control": "no-store, max-age=0"})
+
+
+@app.post("/systemic/analyze/{module_id}")
+async def analyze_systemic(
+    module_id: str,
+    file: UploadFile = File(...),
+    chronological_age: float | None = Form(None),
+):
+    if module_id not in SYSTEMIC_MODULES:
+        raise HTTPException(status_code=404, detail="未知研究模块")
+    if chronological_age is not None and not 18 <= chronological_age <= 100:
+        raise HTTPException(status_code=400, detail="实际年龄应在 18 至 100 岁之间")
+    image = await read_image(file)
+    upload_dir = PROJECT_ROOT / "runtime" / "systemic_uploads"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    image_path = upload_dir / f"{uuid.uuid4().hex}.png"
+    image.save(image_path, format="PNG")
+    try:
+        return await asyncio.to_thread(run_systemic_module, module_id, image_path, chronological_age)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    finally:
+        image_path.unlink(missing_ok=True)
 
 
 @app.get("/research-samples/{sample_id}")

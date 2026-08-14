@@ -80,3 +80,40 @@ algorithm in the API and UI.
 - Limitations: VisionUnite is a research model, not a medical device; its output
   is preserved as a separately attributed specialist observation and cannot
   select the final clinical action.
+
+## Retinal age estimation
+
+- Repository: https://github.com/mehmetaytugyuruk/retina-resnet-age-estimation
+  (MIT).
+- Public weights: https://huggingface.co/mehmetaytugyuruk/retina-resnet-age-estimation
+  (MIT), `resnet101-nonfiltered.pth`, SHA-256
+  `f78a8712f2326ba49f62bd62081f64321a8bd99e8a6f7139325cc176ea827fd0`.
+- Default example: `img00509.jpg`, age 57, from the project's published
+  retinal-age test split. The deployed checkpoint predicts 57.30 years for
+  this held-out example (absolute error 0.30 years).
+- Published non-filtered ResNet101 test performance: MAE 5.09 years,
+  age-category accuracy 0.8431 and F1 0.7132.
+- Scope: retinal apparent age and age difference for research. The output is
+  not biological age and the authors state that the model is not clinically
+  validated.
+
+## VascX retinal vascular phenotyping
+
+- Repository: https://github.com/Eyened/retinalysis-vascx (Apache-2.0 code).
+- Public weights: https://huggingface.co/Eyened/vascx (AGPL-3.0 weights).
+  The deployment pins the May-2026 vessel, optic-disc and fovea weights plus
+  the fine-tuned artery/vein weights under `models/vascx/`.
+- Tasks: retinal field preprocessing, vessel and artery/vein segmentation,
+  optic-disc segmentation, fovea localization and the `full_v3` set of 75
+  numeric vascular features.
+- Default examples: the high-resolution fundus examples distributed with the
+  VascX repository. They demonstrate feature extraction and are not labelled
+  cardiovascular or cerebrovascular outcome cases.
+- Local acceptance gate: retinal field, vessel map, optic disc and fovea must
+  all be measurable. Both deployed default examples pass 4/4 checks. The
+  system then reports caliber, density, tortuosity, bifurcation, sparsity and
+  quadrant distribution without manufacturing disease probabilities.
+- Scope: explainable retinal microvascular phenotypes for association studies
+  and longitudinal analysis. Disease-specific cardiovascular and stroke heads
+  were not integrated because no compatible, task-trained public checkpoints
+  were available with the reviewed repositories.

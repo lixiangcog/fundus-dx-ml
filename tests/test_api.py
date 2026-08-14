@@ -69,11 +69,11 @@ def test_predict_rejects_non_image_content_type():
 
 
 
-def test_v4_catalog_exposes_six_calibrated_pipelines():
+def test_v5_catalog_exposes_six_calibrated_pipelines():
     response = client.get("/capabilities")
     assert response.status_code == 200
     body = response.json()
-    assert body["version"] == "4.0.0"
+    assert body["version"] == "5.0.0"
     assert len(body["capabilities"]) == 6
     assert {item["id"] for item in body["capabilities"]} >= {
         "fundus-lesion-quantification", "oct-fluid-quantification",
@@ -144,3 +144,32 @@ def test_amd_config_declares_dual_specialist_runtime():
     assert case["visits"][0]["bcva_decimal"] == 0.3
     assert case["visits"][1]["bcva_decimal"] == 0.5
     assert case["image_quality"]["status"] == "review"
+
+
+def test_systemic_config_exposes_three_real_modules():
+    response = client.get("/systemic/config")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["version"] == "5.0.0"
+    assert {item["id"] for item in body["modules"]} == {
+        "eye-age", "cardiovascular-retina", "cerebrovascular-retina",
+    }
+    assert all(item["source_url"].startswith("https://github.com/") for item in body["modules"])
+    assert all(item["license"] for item in body["modules"])
+
+
+@pytest.mark.parametrize("module_id", ["eye-age", "cardiovascular-retina", "cerebrovascular-retina"])
+def test_systemic_default_samples_are_available(module_id):
+    response = client.get(f"/systemic/sample/{module_id}")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store, max-age=0"
+    assert response.headers["content-type"].startswith("image/")
+
+
+def test_eye_age_rejects_invalid_chronological_age():
+    response = client.post(
+        "/systemic/analyze/eye-age",
+        data={"chronological_age": "8"},
+        files={"file": ("sample.png", synthetic_image_bytes(), "image/png")},
+    )
+    assert response.status_code == 400

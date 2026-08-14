@@ -7,6 +7,7 @@ import {
   Network, Play, RotateCcw, ScanLine, ShieldAlert, Sparkles, UploadCloud,
 } from 'lucide-react';
 import AMDWorkspace from './AMDWorkspace';
+import SystemicWorkspace from './SystemicWorkspace';
 import './overview.css';
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000' : window.location.origin);
@@ -21,6 +22,11 @@ const DESCRIPTIONS = {
   'oct-fluid-quantification':'定位液体区域并计算面积与高度',
 };
 const CLASS_NAMES = { amd:'年龄相关性黄斑变性', cataract:'白内障', diabetic_retinopathy:'糖尿病视网膜病变', normal:'未见已知异常' };
+const SYSTEMIC_WORKSPACES = {
+  'eye-age': 'eye-age',
+  cardiovascular: 'cardiovascular-retina',
+  cerebrovascular: 'cerebrovascular-retina',
+};
 const FALLBACK = [
   { id:'quality-enhancement',number:'01',title:'质量增强',english:'QUALITY ENHANCEMENT',default_modality:'OCT',modalities:['OCT','OCTA','眼底彩照'],engine:'OCT diffusion enhancement · v2',engine_type:'pretrained_model',method:'OCT 专用扩散去噪 + 模态自适应增强',sample_id:'oct-enhancement-duke-s10-32',sample_url:'/research-samples/oct-enhancement-duke-s10-32',source_url:'https://github.com/DeweiHu/OCT_DDPM',license:'MIT',output:'增强影像 + 配对 PSNR / SSIM / 边缘保持' },
   { id:'structure-segmentation',number:'02',title:'OCT 结构分割',english:'OCT STRUCTURE SEGMENTATION',default_modality:'OCT',modalities:['OCT'],engine:'Duke residual U-Net · v1',engine_type:'trained_model',method:'8 层结构 + 液体的十类像素级分割',sample_id:'oct-structure-duke-s03-4',sample_url:'/research-samples/oct-structure-duke-s03-4',source_url:'https://github.com/ClinicalAI/MIRAGE',license:'Research model / CC BY 4.0 data release',output:'层结构叠加 + Dice / IoU / 厚度代理' },
@@ -68,7 +74,7 @@ function App() {
   };
 
   // The sample URL is the stable identity of the selected default case.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
   useEffect(() => { loadDefault(active); }, [activeId, active?.sample_url]);
   useEffect(() => () => { if (preview?.startsWith('blob:')) URL.revokeObjectURL(preview); }, [preview]);
 
@@ -105,16 +111,19 @@ function App() {
         <nav className="workspace-switch">
           <button className={workspace === 'imaging' ? 'active' : ''} onClick={() => setWorkspace('imaging')}>影像分析</button>
           <button className={workspace === 'amd' ? 'active' : ''} onClick={() => setWorkspace('amd')}>AMD 随访</button>
+          <button className={workspace === 'eye-age' ? 'active' : ''} onClick={() => setWorkspace('eye-age')}>眼龄</button>
+          <button className={workspace === 'cardiovascular' ? 'active' : ''} onClick={() => setWorkspace('cardiovascular')}>眼观心血管</button>
+          <button className={workspace === 'cerebrovascular' ? 'active' : ''} onClick={() => setWorkspace('cerebrovascular')}>眼观脑血管</button>
         </nav>
         <div className="header-meta">
           <span><small>支持影像</small><b>OCT · OCTA · 眼底彩照</b></span>
-          <span><small>分析功能</small><b>{workspace === 'imaging' ? '6 项' : '纵向随访'}</b></span>
+          <span><small>当前模块</small><b>{workspace === 'imaging' ? '影像分析' : workspace === 'amd' ? '纵向随访' : workspace === 'eye-age' ? '眼龄评估' : workspace === 'cardiovascular' ? '心血管表型' : '脑血管表型'}</b></span>
           <span className={`service ${service}`}><small>系统状态</small><b><i /> {service === 'online' ? '在线' : service === 'offline' ? '离线' : '检查中'}</b></span>
         </div>
       </header>
 
       <main>
-        {workspace === 'amd' ? <AMDWorkspace apiUrl={API_URL}/> : <>
+        {workspace === 'amd' ? <AMDWorkspace apiUrl={API_URL}/> : SYSTEMIC_WORKSPACES[workspace] ? <SystemicWorkspace apiUrl={API_URL} moduleId={SYSTEMIC_WORKSPACES[workspace]} /> : <>
         <section className="command-overview">
           <div className="overview-lines" aria-hidden="true"><i /><i /><i /><span /><span /></div>
           <div className="analysis-core">

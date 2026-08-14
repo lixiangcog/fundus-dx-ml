@@ -74,6 +74,8 @@ function AMDWorkspace({ apiUrl }) {
 
   useEffect(() => {
     if (!loading) return;
+    // Reset the staged progress animation when a new analysis starts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProgressStep(0);
     const timers = [2200, 6500, 12500, 17000, 22000].map((delay, index) => setTimeout(() => setProgressStep(index + 1), delay));
     return () => timers.forEach(clearTimeout);
