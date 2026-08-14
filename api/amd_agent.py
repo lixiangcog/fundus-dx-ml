@@ -25,8 +25,11 @@ from PIL import Image
 
 from api.pipelines_v3 import (
     disease_screening,
+    fundus_amd_pathology,
     fundus_lesion_quantification,
+    oct_amd_pathology,
     oct_fluid_quantification,
+    oct_fluid_subtype_quantification,
     structure_segmentation,
     vascular_quantification,
 )
@@ -194,7 +197,7 @@ def _json_from_text(text: str) -> dict[str, Any]:
                 return json.loads(cleaned[start:end + 1])
             except json.JSONDecodeError:
                 pass
-    return {"raw_text": text, "uncertainty": ["模型未返回可解析 JSON；已保留原始真实推理文本。"]}
+    return {"raw_text": text, "uncertainty": ["模型未返回可解析 JSON；已保留原始模型文本。"]}
 
 
 def _metric_value(result: dict, label: str, default: float = 0.0) -> float:
@@ -214,11 +217,20 @@ def _percent_change(followup: float, baseline: float) -> float | None:
     return round((followup - baseline) / baseline * 100, 2)
 
 
+def _finding_probability(findings: list[dict], finding_id: str) -> float:
+    for finding in findings:
+        if finding.get("id") == finding_id:
+            return float(finding.get("positive_probability", 0))
+    return 0.0
+
+
 def _run_tools(paths: dict[str, Path], model, transform, class_names) -> dict[str, Any]:
     visits = {}
     for visit in ("baseline", "followup"):
         oct_result = structure_segmentation(Image.open(paths[f"{visit}_oct"]).convert("RGB"), image_path=paths[f"{visit}_oct"])
         fluid_result = oct_fluid_quantification(Image.open(paths[f"{visit}_oct"]).convert("RGB"), image_path=paths[f"{visit}_oct"])
+        fluid_subtype_result = oct_fluid_subtype_quantification(Image.open(paths[f"{visit}_oct"]).convert("RGB"), image_path=paths[f"{visit}_oct"])
+        oct_pathology_result = oct_amd_pathology(Image.open(paths[f"{visit}_oct"]).convert("RGB"), image_path=paths[f"{visit}_oct"])
         octa_result = vascular_quantification(Image.open(paths[f"{visit}_octa"]).convert("RGB"), image_path=paths[f"{visit}_octa"])
         fundus_result = disease_screening(
             Image.open(paths[f"{visit}_fundus"]).convert("RGB"),
@@ -230,6 +242,20 @@ def _run_tools(paths: dict[str, Path], model, transform, class_names) -> dict[st
             Image.open(paths[f"{visit}_fundus"]).convert("RGB"),
             image_path=paths[f"{visit}_fundus"],
         )
+        fundus_amd_result = fundus_amd_pathology(
+            Image.open(paths[f"{visit}_fundus"]).convert("RGB"),
+            image_path=paths[f"{visit}_fundus"],
+        )
+        oct_finding_labels = {"cnv":"脉络膜新生血管", "dme":"黄斑水肿", "drusen":"玻璃膜疣"}
+        oct_findings = [
+            {
+                "id": finding_id,
+                "label": label,
+                "status": "positive" if oct_pathology_result["prediction"] == finding_id else "negative",
+                "positive_probability": oct_pathology_result["probabilities"].get(finding_id, 0),
+            }
+            for finding_id, label in oct_finding_labels.items()
+        ]
         visits[visit] = {
             "oct": {
                 "summary": oct_result["summary"],
@@ -238,12 +264,19 @@ def _run_tools(paths: dict[str, Path], model, transform, class_names) -> dict[st
                 "overlay": oct_result["result_image"],
                 "structure_overlay": oct_result["result_image"],
                 "fluid_overlay": fluid_result["result_image"],
+                "fluid_subtype_overlay": fluid_subtype_result["result_image"],
+                "pathology_overlay": oct_pathology_result["result_image"],
+                "pathology_prediction": oct_pathology_result["prediction"],
+                "pathology_confidence": oct_pathology_result["confidence"],
+                "pathology_probabilities": oct_pathology_result["probabilities"],
+                "amd_findings": oct_findings,
+                "fluid_subtypes": fluid_subtype_result["subtypes"],
                 "fluid_area_px": _metric_value(fluid_result, "液体面积"),
                 "fluid_ratio_percent": _metric_value(fluid_result, "液体占比"),
                 "fluid_components": _metric_value(fluid_result, "液体连通区"),
                 "max_fluid_height_px": _metric_value(fluid_result, "最大垂直高度"),
-                "quality": {"structure": oct_result.get("quality"), "fluid": fluid_result.get("quality")},
-                "runtime_ms": round(oct_result["runtime_ms"] + fluid_result["runtime_ms"], 1),
+                "quality": {"structure": oct_result.get("quality"), "fluid": fluid_result.get("quality"), "fluid_subtypes": fluid_subtype_result.get("quality"), "pathology": oct_pathology_result.get("quality")},
+                "runtime_ms": round(oct_result["runtime_ms"] + fluid_result["runtime_ms"] + fluid_subtype_result["runtime_ms"] + oct_pathology_result["runtime_ms"], 1),
             },
             "octa": {
                 "summary": octa_result["summary"],
@@ -267,13 +300,14 @@ def _run_tools(paths: dict[str, Path], model, transform, class_names) -> dict[st
                 "overlay": lesion_result["result_image"],
                 "screening_overlay": fundus_result["result_image"],
                 "lesion_overlay": lesion_result["result_image"],
+                "amd_findings": fundus_amd_result["findings"],
                 "cotton_wool_area_px": _metric_value(lesion_result, "棉絮斑/软性渗出面积"),
                 "hard_exudate_area_px": _metric_value(lesion_result, "硬性渗出面积"),
                 "hemorrhage_area_px": _metric_value(lesion_result, "出血面积"),
                 "microaneurysm_area_px": _metric_value(lesion_result, "微动脉瘤面积"),
                 "lesion_ratio_percent": _metric_value(lesion_result, "病灶总占比"),
-                "quality": lesion_result.get("quality"),
-                "runtime_ms": round(fundus_result["runtime_ms"] + lesion_result["runtime_ms"], 1),
+                "quality": {"lesions": lesion_result.get("quality"), "amd": fundus_amd_result.get("quality")},
+                "runtime_ms": round(fundus_result["runtime_ms"] + lesion_result["runtime_ms"] + fundus_amd_result["runtime_ms"], 1),
             },
         }
     b, f = visits["baseline"], visits["followup"]
@@ -287,6 +321,16 @@ def _run_tools(paths: dict[str, Path], model, transform, class_names) -> dict[st
         "fundus_lesion_ratio_points": round(f["fundus"]["lesion_ratio_percent"] - b["fundus"]["lesion_ratio_percent"], 3),
         "fundus_hemorrhage_area_percent": _percent_change(f["fundus"]["hemorrhage_area_px"], b["fundus"]["hemorrhage_area_px"]),
         "amd_probability_points": round((f["fundus"]["probabilities"].get("amd", 0) - b["fundus"]["probabilities"].get("amd", 0)) * 100, 2),
+        "oct_cnv_probability_points": round((f["oct"]["pathology_probabilities"].get("cnv", 0) - b["oct"]["pathology_probabilities"].get("cnv", 0)) * 100, 2),
+        "oct_drusen_probability_points": round((f["oct"]["pathology_probabilities"].get("drusen", 0) - b["oct"]["pathology_probabilities"].get("drusen", 0)) * 100, 2),
+        "oct_irf_area_percent": _percent_change(f["oct"]["fluid_subtypes"]["irf"]["pixels"], b["oct"]["fluid_subtypes"]["irf"]["pixels"]),
+        "oct_srf_area_percent": _percent_change(f["oct"]["fluid_subtypes"]["srf"]["pixels"], b["oct"]["fluid_subtypes"]["srf"]["pixels"]),
+        "oct_ped_area_percent": _percent_change(f["oct"]["fluid_subtypes"]["ped"]["pixels"], b["oct"]["fluid_subtypes"]["ped"]["pixels"]),
+        "fundus_large_drusen_probability_points": round((_finding_probability(f["fundus"]["amd_findings"], "drusen") - _finding_probability(b["fundus"]["amd_findings"], "drusen")) * 100, 2),
+        "fundus_pigment_probability_points": round((_finding_probability(f["fundus"]["amd_findings"], "pigment") - _finding_probability(b["fundus"]["amd_findings"], "pigment")) * 100, 2),
+        "fundus_advanced_amd_probability_points": round((_finding_probability(f["fundus"]["amd_findings"], "advanced_amd") - _finding_probability(b["fundus"]["amd_findings"], "advanced_amd")) * 100, 2),
+        "fundus_ga_probability_points": round((_finding_probability(f["fundus"]["amd_findings"], "ga") - _finding_probability(b["fundus"]["amd_findings"], "ga")) * 100, 2),
+        "fundus_central_ga_probability_points": round((_finding_probability(f["fundus"]["amd_findings"], "central_ga") - _finding_probability(b["fundus"]["amd_findings"], "central_ga")) * 100, 2),
     }
     return {"visits": visits, "deltas": deltas}
 
@@ -487,13 +531,33 @@ def _build_procedure_plan(
     }
 
 
+def _amd_lesion_context(tool_results: dict) -> dict[str, Any]:
+    context = {}
+    for visit, data in tool_results.get("visits", {}).items():
+        context[visit] = {
+            "oct": {
+                "screening_probabilities": data["oct"].get("pathology_probabilities"),
+                "fluid_subtypes": data["oct"].get("fluid_subtypes"),
+                "total_fluid_area_px": data["oct"].get("fluid_area_px"),
+            },
+            "octa": {
+                "vessel_density_percent": data["octa"].get("vessel_density_percent"),
+                "skeleton_length_px": data["octa"].get("skeleton_length_px"),
+            },
+            "fundus": {"amd_findings": data["fundus"].get("amd_findings")},
+        }
+    return context
+
+
 def _vision_prompt(case: dict, tool_results: dict) -> str:
     return f"""You are an ophthalmic imaging assistant. Compare six images in this exact order:
 1 baseline OCT; 2 baseline OCTA; 3 baseline color fundus; 4 follow-up OCT; 5 follow-up OCTA; 6 follow-up color fundus.
 Case context: {json.dumps(case, ensure_ascii=False)}
 Locally computed auxiliary deltas (separate from the historical reference biomarkers): {json.dumps(tool_results["deltas"], ensure_ascii=False)}
+Per-image AMD lesion model outputs: {json.dumps(_amd_lesion_context(tool_results), ensure_ascii=False)}
 Historical reference biomarkers, when present: {json.dumps(case.get("reference_biomarkers"), ensure_ascii=False)}
-Describe only visible findings. Do not claim a clinical diagnosis and do not invent tests that are not shown.
+Describe visible findings and reconcile them with the supplied per-image lesion probabilities and masks. Do not invent tests that are not shown.
+For every image, explicitly cover relevant AMD findings: OCT CNV/drusen/IRF/SRF/PED; OCTA macular neovascular flow-network morphology; fundus drusen/pigment abnormality/late AMD/geographic atrophy/central GA. State when a finding is absent or uncertain.
 Compare retinal morphology and possible fluid-like spaces on OCT, macular flow network on OCTA, fundus macular appearance or hemorrhage cues, longitudinal change, and image quality.
 Return JSON only. All string values must be Simplified Chinese:
 {{
@@ -512,6 +576,7 @@ def _report_prompt(case: dict, tools: dict, vision: dict, specialist: dict, opti
 Selected action: {chosen["title"]}; disease state: {state["activity"]}.
 Case: {json.dumps(case, ensure_ascii=False)}
 Locally computed auxiliary tool deltas: {json.dumps(tools["deltas"], ensure_ascii=False)}
+Per-image AMD lesion model outputs: {json.dumps(_amd_lesion_context(tools), ensure_ascii=False)}
 Cross-modal Qwen observations: {json.dumps(vision, ensure_ascii=False)}
 VisionUnite fundus specialist observations: {json.dumps(specialist, ensure_ascii=False)}
 Candidate evaluations: {json.dumps(options, ensure_ascii=False)}
@@ -622,11 +687,17 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
     report.setdefault("case_summary", case.get("context", "病例信息需结合原始病历复核。"))
     quantitative_change = (
         f"本地分割模型测得：OCT 厚度代理 {display_delta('oct_thickness_proxy_percent', '%')}，"
-        f"液体面积 {display_delta('oct_fluid_area_percent', '%')}；"
+        f"液体面积 {display_delta('oct_fluid_area_percent', '%')}，"
+        f"视网膜内液 {display_delta('oct_irf_area_percent', '%')}，"
+        f"视网膜下液 {display_delta('oct_srf_area_percent', '%')}，"
+        f"色素上皮脱离 {display_delta('oct_ped_area_percent', '%')}，"
+        f"CNV 筛查概率 {display_delta('oct_cnv_probability_points', ' 个百分点')}；"
         f"OCTA 血管密度 {display_delta('octa_vessel_density_points', ' 个百分点')}，"
         f"血管骨架 {display_delta('octa_skeleton_length_percent', '%')}；"
         f"彩照病灶占比 {display_delta('fundus_lesion_ratio_points', ' 个百分点')}，"
-        f"AMD 筛查概率 {display_delta('amd_probability_points', ' 个百分点')}。"
+        f"大玻璃膜疣 {display_delta('fundus_large_drusen_probability_points', ' 个百分点')}，"
+        f"色素异常 {display_delta('fundus_pigment_probability_points', ' 个百分点')}，"
+        f"晚期 AMD {display_delta('fundus_advanced_amd_probability_points', ' 个百分点')}。"
     )
     model_observation = vision.get(
         "change_assessment",
@@ -731,9 +802,9 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
             "report_model": report_result["model"],
             "real_mllm_inference": True,
             "fallback_generation": False,
-            "quantitative_tools": ["Duke residual U-Net", "OCTA DynUNet", "FundusDx ResNet18"],
+            "quantitative_tools": ["Duke residual U-Net", "multi-source OCT fluid ONNX", "OCT AMD EfficientNet-B3", "OCTA DynUNet", "FundusDx ResNet18", "DeepSeeNet five-head ONNX"],
             "evidence_retrieval": "BM25 over curated guideline evidence cards",
         },
         "runtime_ms": round((time.perf_counter() - started) * 1000, 1),
-        "notice": "本模块用于辅助分析；默认加载去标识的内置示例病例。历史随访记录与系统分析结果分开保存；任何临床行动必须由有资质的眼科医生结合原始影像确认。",
+        "notice": "",
     }

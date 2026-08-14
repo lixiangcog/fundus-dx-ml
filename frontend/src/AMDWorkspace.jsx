@@ -27,12 +27,20 @@ const MODALITIES = [
 const DELTA_METRICS = [
   ['oct_fluid_area_percent','OCT 液体面积','%'],
   ['oct_fluid_ratio_points','OCT 液体占比',' 个百分点'],
+  ['oct_irf_area_percent','视网膜内液','%'],
+  ['oct_srf_area_percent','视网膜下液','%'],
+  ['oct_ped_area_percent','色素上皮脱离','%'],
+  ['oct_cnv_probability_points','OCT 新生血管概率',' 个百分点'],
   ['octa_vessel_density_points','OCTA 血管密度',' 个百分点'],
   ['octa_skeleton_length_percent','OCTA 血管骨架','%'],
   ['octa_central_avascular_area_percent','中央无血管候选区','%'],
   ['fundus_lesion_ratio_points','彩照病灶占比',' 个百分点'],
   ['fundus_hemorrhage_area_percent','彩照出血面积','%'],
   ['amd_probability_points','AMD 筛查概率',' 个百分点'],
+  ['fundus_large_drusen_probability_points','彩照玻璃膜疣概率',' 个百分点'],
+  ['fundus_pigment_probability_points','彩照色素异常概率',' 个百分点'],
+  ['fundus_advanced_amd_probability_points','彩照晚期 AMD 概率',' 个百分点'],
+  ['fundus_ga_probability_points','地图样萎缩概率',' 个百分点'],
 ];
 
 function showNumber(value, digits = 2) {
@@ -139,7 +147,6 @@ function AMDWorkspace({ apiUrl }) {
       <div>
         <span className="eyebrow">纵向 AMD 随访</span>
         <h1>多模态影像对比，<em>辅助随访决策。</em></h1>
-        <p>对两次就诊影像进行分割与定量比较，生成可追溯的随访建议和结构化操作规划。</p>
       </div>
       <StatusBadge service={service}/>
     </section>
@@ -191,7 +198,9 @@ function AMDWorkspace({ apiUrl }) {
         <ul>
           <li><Check size={12}/>对比两次就诊的六张影像</li>
           <li><Check size={12}/>复核两次眼底彩照变化</li>
-          <li><Check size={12}/>分割 OCT 液体、OCTA 血管与彩照病灶</li>
+          <li><Check size={12}/>识别 OCT 新生血管、玻璃膜疣与三类液体</li>
+          <li><Check size={12}/>识别彩照玻璃膜疣、色素异常与黄斑萎缩</li>
+          <li><Check size={12}/>分割 OCTA 血管与彩照微小病灶</li>
           <li><Check size={12}/>比较两次就诊的定量变化</li>
           <li><Check size={12}/>核验相关随访依据</li>
           <li><Check size={12}/>生成随访建议与操作规划</li>
@@ -248,9 +257,18 @@ function AgentResult({ result, onReset }) {
             {Object.entries(visitTools).map(([visit,data]) => {
               const tiles = [
                 ['OCT 层结构',data.oct.structure_overlay || data.oct.overlay],
-                ['OCT 液体',data.oct.fluid_overlay],
+                ['OCT 液体总量',data.oct.fluid_overlay],
+                ['OCT 三类液体',data.oct.fluid_subtype_overlay],
+                ['OCT AMD 病灶',data.oct.pathology_overlay],
                 ['OCTA 血管',data.octa.overlay],
                 ['彩照病灶',data.fundus.lesion_overlay || data.fundus.overlay],
+              ];
+              const fluidFindings = [
+                ['irf','视网膜内液'], ['srf','视网膜下液'], ['ped','色素上皮脱离'],
+              ].map(([id,label]) => ({id,label,status:Number(data.oct.fluid_subtypes?.[id]?.pixels) > 0 ? 'positive' : 'negative',value:data.oct.fluid_subtypes?.[id]?.pixels,unit:'px'}));
+              const lesionGroups = [
+                ['OCT 病灶筛查',[...(data.oct.amd_findings || []),...fluidFindings]],
+                ['眼底彩照 AMD 表征',data.fundus.amd_findings || []],
               ];
               const metrics = [
                 ['液体面积',data.oct.fluid_area_px,'px'],
@@ -267,6 +285,13 @@ function AgentResult({ result, onReset }) {
                 <header><span>{visit === 'baseline' ? 'V0' : 'V1'}</span><div><strong>{VISIT_LABELS[visit]}</strong><small>{visit === 'baseline' ? '治疗前基线' : '治疗后随访'}</small></div></header>
                 <div className="segmentation-gallery">{tiles.map(([label,image]) => <figure key={label}><img src={image} alt={`${VISIT_LABELS[visit]} ${label}`}/><figcaption>{label}</figcaption></figure>)}</div>
                 <div className="visit-quant-grid">{metrics.map(([label,value,unit]) => <div key={label}><small>{label}</small><strong>{showNumber(value)}<em>{unit}</em></strong></div>)}</div>
+                <div className="amd-lesion-groups">{lesionGroups.map(([title,findings]) => <section key={title}>
+                  <h4>{title}</h4>
+                  <div>{findings.map((finding) => <article className={finding.status === 'positive' ? 'positive' : 'negative'} key={finding.id}>
+                    <span><i/>{finding.label}</span>
+                    <strong>{finding.value !== undefined ? `${showNumber(finding.value)} ${finding.unit}` : `${showNumber(Number(finding.positive_probability) * 100)}%`}</strong>
+                  </article>)}</div>
+                </section>)}</div>
               </article>;
             })}
           </div>
@@ -274,7 +299,6 @@ function AgentResult({ result, onReset }) {
             <div className="delta-heading"><span><ArrowRight size={15}/>基线至随访变化</span><small>正值表示增加，负值表示减少</small></div>
             <div>{DELTA_METRICS.map(([key,label,unit]) => <article key={key} className={Number(deltas[key]) > 0 ? 'increase' : Number(deltas[key]) < 0 ? 'decrease' : ''}><small>{label}</small><strong>{showDelta(deltas[key],unit)}</strong></article>)}</div>
           </div>
-          <p className="segmentation-notice"><AlertTriangle size={13}/>{result.case_quality?.label}。像素指标用于同协议纵向比较，不等同于设备原生 μm、mm² 或体积测量。</p>
         </section>
 
         <section className="procedure-card">
@@ -312,7 +336,6 @@ function AgentResult({ result, onReset }) {
             <article><small>OCTA CNV 面积</small><strong>{result.reported_reference_biomarkers.octa.cnv_candidate_area_mm2[0]} → {result.reported_reference_biomarkers.octa.cnv_candidate_area_mm2[1]} mm²</strong></article>
             <article><small>眼底病灶面积</small><strong>{result.reported_reference_biomarkers.fundus.candidate_lesion_area_mm2[0]} → {result.reported_reference_biomarkers.fundus.candidate_lesion_area_mm2[1]} mm²</strong></article>
           </div>
-          <p className="quality-warning"><AlertTriangle size={13}/>{result.case_quality?.label} · {result.case_quality?.reason}</p>
         </section>}
 
         <section className="options-card">
@@ -341,7 +364,6 @@ function AgentResult({ result, onReset }) {
         </section>
       </aside>
     </div>
-    <p className="agent-notice"><ShieldAlert size={14}/>{result.notice}</p>
   </motion.section>;
 }
 

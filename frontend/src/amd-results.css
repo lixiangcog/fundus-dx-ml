@@ -135,7 +135,7 @@
   border-left: 2px solid var(--cyan);
   background: rgba(2, 12, 15, .84);
   color: #a6c6ca;
-  font-size: 7px;
+  font-size: 9px;
 }
 
 .visit-quant-grid {
@@ -156,21 +156,83 @@
 
 .visit-quant-grid small {
   color: #54767d;
-  font-size: 7px;
+  font-size: 9px;
   line-height: 1.35;
 }
 
 .visit-quant-grid strong {
   color: #d9f4f6;
-  font: 700 14px/1.7 'Rajdhani';
+  font: 700 16px/1.7 'Rajdhani';
 }
 
 .visit-quant-grid em {
   color: var(--cyan);
-  font: 500 7px 'IBM Plex Mono';
+  font: 500 9px 'IBM Plex Mono';
   font-style: normal;
   margin-left: 3px;
 }
+
+.amd-lesion-groups {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.amd-lesion-groups section {
+  padding-top: 10px;
+  border-top: 1px solid rgba(8, 229, 237, .14);
+}
+
+.amd-lesion-groups h4 {
+  margin: 0 0 7px;
+  color: #a8c9ce;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.amd-lesion-groups section > div {
+  display: grid;
+  gap: 4px;
+}
+
+.amd-lesion-groups article {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 7px;
+  background: rgba(255, 255, 255, .018);
+}
+
+.amd-lesion-groups article span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #819ea4;
+  font-size: 9px;
+}
+
+.amd-lesion-groups article span i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #536e74;
+  box-shadow: 0 0 0 2px rgba(83, 110, 116, .14);
+}
+
+.amd-lesion-groups article strong {
+  color: #b8d9dd;
+  font: 700 12px 'Rajdhani';
+}
+
+.amd-lesion-groups article.positive span { color: #d3f4f6; }
+.amd-lesion-groups article.positive span i {
+  background: var(--cyan);
+  box-shadow: 0 0 8px rgba(8, 229, 237, .5);
+}
+.amd-lesion-groups article.positive strong { color: var(--cyan); }
 
 .longitudinal-deltas {
   margin-top: 14px;
@@ -209,8 +271,8 @@
   flex-direction: column;
 }
 
-.longitudinal-deltas article small { color: #587a81; font-size: 7px; }
-.longitudinal-deltas article strong { color: #cce7e9; font: 700 15px/1.8 'Rajdhani'; }
+.longitudinal-deltas article small { color: #587a81; font-size: 9px; }
+.longitudinal-deltas article strong { color: #cce7e9; font: 700 16px/1.8 'Rajdhani'; }
 .longitudinal-deltas article.decrease strong { color: #3ee7b4; }
 .longitudinal-deltas article.increase strong { color: #ffbd65; }
 

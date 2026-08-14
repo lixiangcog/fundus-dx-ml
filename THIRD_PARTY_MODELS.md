@@ -117,3 +117,55 @@ algorithm in the API and UI.
   and longitudinal analysis. Disease-specific cardiovascular and stroke heads
   were not integrated because no compatible, task-trained public checkpoints
   were available with the reviewed repositories.
+
+## AMD-specific OCT screening
+
+- Public model: https://huggingface.co/tomalmog/oct-retinal-classifier (MIT),
+  pinned revision `f199c1c8cfce6268ce138871a3baa707a4e8a076`.
+- Artifact: `pytorch_model.bin`, loaded with the published EfficientNet-B3
+  architecture. The AMD workbench reports CNV, drusen, DME and normal
+  probabilities plus a gradient-based localization heatmap.
+- The publisher reports 99.6% accuracy on the 968-image Kermany test set. This
+  number is provenance metadata, not a locally reproduced external result.
+
+## OCT IRF / SRF / PED segmentation
+
+- Code: https://github.com/Animesh-Kr/OCT-Fluid-Segmentation (MIT).
+- Public model: https://huggingface.co/animeshakr/oct-fluid-segmentation,
+  pinned revision `e17b3888c267d7d7e56dc35096cf72a0ca85a422`.
+- Artifact: `deployment/slot2_v2l_seed123.onnx` with its external data file.
+  The deployed supplementary head reports separate IRF, SRF and PED masks,
+  pixel areas, ratios, component counts and maximum heights.
+- Quality gate: the publisher reports mean fluid Dice 0.2739 on a 503-slice,
+  four-source test set (IRF 0.2043, SRF 0.1712, PED 0.4463). Because this is
+  substantially below the validation score, this head is marked for review and
+  does not replace the locally calibrated Duke total-fluid model.
+
+## DeepSeeNet color-fundus AMD factors
+
+- Official code: https://github.com/ncbi-nlp/DeepSeeNet (public NCBI research
+  release). The five model artifacts were mirrored from the public Hugging Face
+  exports at fixed revisions: drusen `cacd45e5f737f6fe6d0ca8ca0da294576ffac481`,
+  pigment `9c9dbd67b8ac58bbb5bc9955822c2e97d5c84945`, late AMD
+  `2d24c38b3128fbe1ba67480076ebcf9919a5dc94`, GA
+  `8c6590b6d754da14e6ca4a1585a6f776ada97dd2`, and central GA
+  `1a483a181db7059aea11162909a168a237ae66c6`.
+- The original TensorFlow SavedModels were converted once to ONNX. Conversion
+  parity was verified on both built-in fundus images; maximum absolute output
+  error was `3.6e-7`.
+- Outputs: drusen size, pigmentary abnormality, late AMD, geographic atrophy
+  and central geographic atrophy, each with complete class probabilities.
+- The DeepSeeNet paper reports AUC 0.94 for large drusen, 0.93 for pigmentary
+  abnormalities and 0.97 for late AMD. The built-in longitudinal figure crops
+  have no pixel-level ground truth, so their predictions remain unverified.
+
+## OCTA CNV research audit
+
+- CNV-Net code is public at
+  https://github.com/mahsavali/CNV-Segmentation-Classification-OCTA and reports
+  CNV mask segmentation plus activity criteria. The reviewed repository does
+  not publish a deployable trained checkpoint.
+- RBGNet's repository currently contains only a README and no released weights.
+  Consequently the system retains the verified OCTA vessel checkpoint and
+  quantitative morphology, and does not label a vessel-density map as a CNV
+  segmentation model.

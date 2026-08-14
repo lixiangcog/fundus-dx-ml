@@ -18,14 +18,17 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import onnxruntime as ort
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from fastapi import FastAPI, Header, HTTPException
 from monai.networks.nets import DynUNet, UNet
 from PIL import Image
 from pydantic import BaseModel, Field
 from safetensors.torch import load_file
 import torchseg
+import timm
 from torchvision import models, transforms
 
 from services.oct_ddpm import OCTDiffusionDenoiser
@@ -40,13 +43,24 @@ OCTA_CHECKPOINT = PROJECT_ROOT / "models/octa-vessels/30_model.pth"
 OCT_CHECKPOINT = PROJECT_ROOT / "models/oct-structure/duke_unet_v1.pth"
 OCT_ENHANCEMENT_CHECKPOINT = PROJECT_ROOT / "models/oct-enhancement/DDPM_oct_dataset2_2021-07-08.pt"
 EYE_AGE_CHECKPOINT = PROJECT_ROOT / "models/eye-age/resnet101-nonfiltered.pth"
+AMD_PATHOLOGY_DIR = PROJECT_ROOT / "models/amd-pathology"
+OCT_AMD_CHECKPOINT = AMD_PATHOLOGY_DIR / "raw/oct_classifier/pytorch_model.bin"
+OCT_FLUID_SUBTYPE_ONNX = AMD_PATHOLOGY_DIR / "oct-fluid/slot2_v2l_seed123.onnx"
+FUNDUS_AMD_ONNX = {
+    "drusen": AMD_PATHOLOGY_DIR / "drusen.onnx",
+    "pigment": AMD_PATHOLOGY_DIR / "pigment.onnx",
+    "advanced_amd": AMD_PATHOLOGY_DIR / "advanced_amd.onnx",
+    "ga": AMD_PATHOLOGY_DIR / "ga.onnx",
+    "central_ga": AMD_PATHOLOGY_DIR / "central_ga.onnx",
+}
 VASCX_MODEL_DIR = PROJECT_ROOT / "models/vascx"
 VASCX_BIN = Path(sys.executable).with_name("vascx")
 INFERENCE_LOCK = threading.Lock()
 MODELS: dict[str, object] = {}
 READY_TASKS = {
     "fundus_lesions", "octa_vessels", "oct_structure", "oct_enhancement",
-    "eye_age", "retinal_vascular",
+    "eye_age", "retinal_vascular", "oct_amd_pathology", "oct_fluid_subtypes",
+    "fundus_amd_pathology",
 }
 
 FUNDUS_NAMES = ["BG", "CTW", "EX", "HE", "MA"]
@@ -62,11 +76,49 @@ OCT_COLORS = np.array(
 )
 IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
 IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+OCT_AMD_NAMES = ["CNV", "DME", "DRUSEN", "NORMAL"]
+OCT_FLUID_NAMES = ["BG", "IRF", "SRF", "PED"]
+OCT_FLUID_COLORS = np.array(
+    [[0, 0, 0], [35, 122, 245], [255, 137, 55], [63, 190, 110]], dtype=np.uint8
+)
+FUNDUS_AMD_LABELS = {
+    "drusen": ["无/小玻璃膜疣", "中等玻璃膜疣", "大玻璃膜疣"],
+    "pigment": ["未见色素异常", "色素异常"],
+    "advanced_amd": ["未见晚期 AMD", "晚期 AMD"],
+    "ga": ["未见地图样萎缩", "地图样萎缩"],
+    "central_ga": ["未见中心性地图样萎缩", "中心性地图样萎缩"],
+}
+FUNDUS_AMD_FINDING_LABELS = {
+    "drusen": "中/大玻璃膜疣",
+    "pigment": "色素异常",
+    "advanced_amd": "晚期 AMD",
+    "ga": "地图样萎缩",
+    "central_ga": "中心性地图样萎缩",
+}
+
+
+class OCTAMDClassifier(nn.Module):
+    """EfficientNet-B3 checkpoint released for CNV/DME/drusen OCT screening."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.backbone = timm.create_model(
+            "efficientnet_b3", pretrained=False, num_classes=0, global_pool=""
+        )
+        self.global_pool = nn.AdaptiveAvgPool2d(1)
+        self.classifier = nn.Sequential(
+            nn.Flatten(), nn.Dropout(0.3), nn.Linear(1536, 512), nn.ReLU(inplace=True),
+            nn.Dropout(0.15), nn.Linear(512, 4),
+        )
+
+    def forward(self, tensor: torch.Tensor) -> torch.Tensor:
+        features = self.backbone(tensor)
+        return self.classifier(self.global_pool(features))
 
 
 class ImagingRequest(BaseModel):
     image: str = Field(min_length=1)
-    task: str = Field(pattern="^(fundus_lesions|octa_vessels|oct_structure|oct_enhancement|eye_age|retinal_vascular)$")
+    task: str = Field(pattern="^(fundus_lesions|octa_vessels|oct_structure|oct_enhancement|eye_age|retinal_vascular|oct_amd_pathology|oct_fluid_subtypes|fundus_amd_pathology)$")
 
 
 def _token() -> str:
@@ -79,7 +131,7 @@ def _write_status(status: str, detail: str = "") -> None:
         "status": status,
         "host": socket.gethostname(),
         "port": PORT,
-        "model": "Six calibrated ophthalmic imaging tasks",
+        "model": "Nine ophthalmic imaging tasks",
         "job_id": os.getenv("SLURM_JOB_ID", ""),
         "updated_at": time.time(),
         "detail": detail,
@@ -100,7 +152,8 @@ def _load() -> None:
         str(path) for path in
         (
             FUNDUS_CHECKPOINT, OCTA_CHECKPOINT, OCT_CHECKPOINT, OCT_ENHANCEMENT_CHECKPOINT,
-            EYE_AGE_CHECKPOINT, VASCX_MODEL_DIR / "artery_vein/av.pt",
+            EYE_AGE_CHECKPOINT, OCT_AMD_CHECKPOINT, OCT_FLUID_SUBTYPE_ONNX,
+            *FUNDUS_AMD_ONNX.values(), VASCX_MODEL_DIR / "artery_vein/av.pt",
             VASCX_MODEL_DIR / "vessels/vessels.pt", VASCX_MODEL_DIR / "disc/disc.pt",
             VASCX_MODEL_DIR / "fovea/fovea.pt", VASCX_BIN,
         )
@@ -132,6 +185,30 @@ def _load() -> None:
     oct_enhancement = OCTDiffusionDenoiser(OCT_ENHANCEMENT_CHECKPOINT, timestep=14)
     oct_enhancement.eval().cuda()
 
+    oct_amd = OCTAMDClassifier()
+    oct_amd.load_state_dict(torch.load(OCT_AMD_CHECKPOINT, map_location="cpu", weights_only=True))
+    oct_amd.eval().cuda()
+
+    onnx_options = ort.SessionOptions()
+    onnx_options.intra_op_num_threads = 2
+    onnx_options.inter_op_num_threads = 1
+    onnx_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    fundus_amd = {
+        name: ort.InferenceSession(
+            str(path), sess_options=onnx_options, providers=["CPUExecutionProvider"]
+        )
+        for name, path in FUNDUS_AMD_ONNX.items()
+    }
+    fluid_options = ort.SessionOptions()
+    fluid_options.intra_op_num_threads = 4
+    fluid_options.inter_op_num_threads = 1
+    fluid_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    oct_fluid_subtypes = ort.InferenceSession(
+        str(OCT_FLUID_SUBTYPE_ONNX),
+        sess_options=fluid_options,
+        providers=["CPUExecutionProvider"],
+    )
+
     eye_age_checkpoint = torch.load(EYE_AGE_CHECKPOINT, map_location="cpu", weights_only=False)
     eye_age = models.resnet101(weights=None)
     eye_age.fc = nn.Sequential(
@@ -146,7 +223,8 @@ def _load() -> None:
     MODELS.update(
         fundus_lesions=fundus, octa_vessels=octa,
         oct_structure=oct_model, oct_enhancement=oct_enhancement, eye_age=eye_age,
-        retinal_vascular=True,
+        retinal_vascular=True, oct_amd_pathology=oct_amd,
+        oct_fluid_subtypes=oct_fluid_subtypes, fundus_amd_pathology=fundus_amd,
     )
 
 
@@ -246,6 +324,114 @@ def _oct_infer(image: Image.Image) -> dict:
         "model": "Duke DME residual U-Net v1", "labels": OCT_NAMES,
         "label_map_png": _png64(labels, "L"), "overlay_png": _png64(overlay),
         "input_size": [512, 512],
+    }
+
+
+def _oct_amd_pathology_infer(image: Image.Image) -> dict:
+    resized = image.convert("RGB").resize((224, 224), Image.Resampling.BICUBIC)
+    rgb = np.asarray(resized)
+    tensor = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    ])(resized)[None].cuda()
+    model = MODELS["oct_amd_pathology"]
+    model.zero_grad(set_to_none=True)
+    with torch.enable_grad():
+        features = model.backbone(tensor)
+        features.retain_grad()
+        logits = model.classifier(model.global_pool(features))
+        probabilities = torch.softmax(logits, dim=1)[0]
+        prediction = int(torch.argmax(probabilities))
+        logits[0, prediction].backward()
+        weights = features.grad.mean(dim=(2, 3), keepdim=True)
+        cam = torch.relu((weights * features).sum(dim=1, keepdim=True))
+        cam = F.interpolate(cam, size=(224, 224), mode="bilinear", align_corners=False)[0, 0]
+    cam = cam.detach().cpu().numpy()
+    cam = (cam - float(cam.min())) / max(float(cam.max() - cam.min()), 1e-7)
+    heatmap = cv2.cvtColor(
+        cv2.applyColorMap(np.uint8(cam * 255), cv2.COLORMAP_TURBO), cv2.COLOR_BGR2RGB
+    )
+    overlay = cv2.addWeighted(rgb, 0.62, heatmap, 0.38, 0)
+    scores = {
+        name: round(float(probabilities[index].detach().cpu()), 7)
+        for index, name in enumerate(OCT_AMD_NAMES)
+    }
+    return {
+        "model": "Public OCT EfficientNet-B3",
+        "prediction": OCT_AMD_NAMES[prediction],
+        "confidence": scores[OCT_AMD_NAMES[prediction]],
+        "probabilities": scores,
+        "heatmap_png": _png64(overlay),
+        "input_size": [224, 224],
+    }
+
+
+def _clahe_oct(image: Image.Image) -> np.ndarray:
+    gray = np.asarray(image.convert("L").resize((512, 512), Image.Resampling.BILINEAR), dtype=np.float32)
+    minimum, maximum = float(gray.min()), float(gray.max())
+    scaled = np.uint8((gray - minimum) / max(maximum - minimum, 1e-6) * 255)
+    return cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(scaled)
+
+
+def _oct_fluid_subtypes_infer(image: Image.Image) -> dict:
+    processed = _clahe_oct(image)
+    tensor = (processed.astype(np.float32) / 255.0)[None, None]
+    session = MODELS["oct_fluid_subtypes"]
+    logits = session.run(None, {session.get_inputs()[0].name: tensor})[0]
+    shifted = logits - logits.max(axis=1, keepdims=True)
+    probability = np.exp(shifted)
+    probability /= np.maximum(probability.sum(axis=1, keepdims=True), 1e-8)
+    labels = probability.argmax(axis=1)[0].astype(np.uint8)
+    confidence = probability.max(axis=1)[0]
+    color = OCT_FLUID_COLORS[labels]
+    base = cv2.cvtColor(processed, cv2.COLOR_GRAY2RGB)
+    overlay = cv2.addWeighted(base, 0.68, color, 0.48, 0)
+    masks = {
+        name: _png64(np.uint8(labels == class_id) * 255, "L")
+        for class_id, name in enumerate(OCT_FLUID_NAMES) if class_id > 0
+    }
+    return {
+        "model": "Public multi-source OCT fluid model",
+        "labels": OCT_FLUID_NAMES,
+        "label_map_png": _png64(labels, "L"),
+        "mask_pngs": masks,
+        "overlay_png": _png64(overlay),
+        "mean_confidence": round(float(confidence.mean()), 6),
+        "input_size": [512, 512],
+    }
+
+
+def _fundus_amd_pathology_infer(image: Image.Image) -> dict:
+    source = image.convert("RGB")
+    side = min(source.size)
+    left = (source.width - side) // 2
+    top = (source.height - side) // 2
+    cropped = source.crop((left, top, left + side, top + side))
+    findings = []
+    sessions = MODELS["fundus_amd_pathology"]
+    for name, session in sessions.items():
+        shape = session.get_inputs()[0].shape
+        size = int(shape[1])
+        array = np.asarray(cropped.resize((size, size), Image.Resampling.BICUBIC), dtype=np.float32)
+        tensor = array[None] / 127.5 - 1.0
+        output = session.run(None, {session.get_inputs()[0].name: tensor})[0][0]
+        labels = FUNDUS_AMD_LABELS[name]
+        probabilities = {label: round(float(output[index]), 7) for index, label in enumerate(labels)}
+        prediction = int(np.argmax(output))
+        positive_probability = float(output[1:].sum()) if name == "drusen" else float(output[1])
+        findings.append({
+            "id": name,
+            "label": FUNDUS_AMD_FINDING_LABELS[name],
+            "prediction_label": labels[prediction],
+            "status": "positive" if prediction > 0 else "negative",
+            "confidence": round(float(output[prediction]), 7),
+            "positive_probability": round(positive_probability, 7),
+            "probabilities": probabilities,
+        })
+    return {
+        "model": "DeepSeeNet five-head ensemble",
+        "findings": findings,
+        "input_crop": [side, side],
     }
 
 
@@ -460,6 +646,9 @@ def infer(request: ImagingRequest, x_agent_token: str = Header(default="")):
             "octa_vessels": _octa_infer,
             "oct_structure": _oct_infer,
             "oct_enhancement": _oct_enhancement_infer,
+            "oct_amd_pathology": _oct_amd_pathology_infer,
+            "oct_fluid_subtypes": _oct_fluid_subtypes_infer,
+            "fundus_amd_pathology": _fundus_amd_pathology_infer,
             "eye_age": _eye_age_infer,
             "retinal_vascular": _retinal_vascular_infer,
         }[request.task](image)

@@ -255,5 +255,87 @@ def oct_fluid_quantification(image: Image.Image, image_path=None, reference=None
     return {"summary":"OCT 液体定位与负荷量化完成","result_image":_png_data_url(overlay),"metrics":metrics,"quality":_quality("passed","独立测试已验证","Duke DME subject-wise independent test",evidence,"fluid Dice ≥ 0.65",reference),"runtime_ms":raw["runtime_ms"],"notice":"像素面积/高度不是体积；跨设备物理定量需要体素间距和完整 OCT 体数据。"}
 
 
+def oct_amd_pathology(image: Image.Image, image_path=None, **_) -> dict:
+    raw = _run_segmentation("oct_amd_pathology", image_path)
+    names = {"CNV":"脉络膜新生血管", "DME":"黄斑水肿", "DRUSEN":"玻璃膜疣", "NORMAL":"未见模型已知异常"}
+    probabilities = {key.lower(): float(value) for key, value in raw["probabilities"].items()}
+    metrics = [
+        _metric(names[key], round(float(value) * 100, 2), "%")
+        for key, value in raw["probabilities"].items()
+    ]
+    return {
+        "summary": names.get(raw["prediction"], raw["prediction"]),
+        "prediction": raw["prediction"].lower(),
+        "confidence": raw["confidence"],
+        "probabilities": probabilities,
+        "result_image": "data:image/png;base64," + raw["heatmap_png"],
+        "metrics": metrics,
+        "quality": _quality(
+            "unverified", "公开权重已完成集成校验", "Kermany OCT 四分类；当前病例无配对真值",
+            {"publisher_reported_test_accuracy": 0.996, "checkpoint_revision":"f199c1c8cfce6268ce138871a3baa707a4e8a076"},
+            "仅作病灶筛查概率，不替代像素分割", None,
+        ),
+        "runtime_ms": raw["runtime_ms"],
+    }
+
+
+def oct_fluid_subtype_quantification(image: Image.Image, image_path=None, **_) -> dict:
+    raw = _run_segmentation("oct_fluid_subtypes", image_path)
+    labels = _decode_png64(raw["label_map_png"])
+    names = {1:"视网膜内液", 2:"视网膜下液", 3:"色素上皮脱离"}
+    subtypes = {}
+    metrics = []
+    for class_id, label in names.items():
+        mask = labels == class_id
+        count, _, stats, _ = cv2.connectedComponentsWithStats(mask.astype(np.uint8), 8)
+        heights = [int(stats[index, cv2.CC_STAT_HEIGHT]) for index in range(1, count)]
+        item = {
+            "pixels": int(mask.sum()),
+            "ratio_percent": round(float(mask.mean() * 100), 4),
+            "components": max(0, count - 1),
+            "max_height_px": max(heights, default=0),
+        }
+        subtypes[{1:"irf", 2:"srf", 3:"ped"}[class_id]] = item
+        metrics.extend([
+            _metric(f"{label}面积", item["pixels"], "px"),
+            _metric(f"{label}占比", item["ratio_percent"], "%"),
+        ])
+    return {
+        "summary": "OCT 三类液体病灶分割与定量完成",
+        "result_image": "data:image/png;base64," + raw["overlay_png"],
+        "subtypes": subtypes,
+        "mean_confidence": raw.get("mean_confidence"),
+        "metrics": metrics,
+        "quality": _quality(
+            "review", "跨来源测试泛化有限", "四来源 503 张独立测试切片",
+            {"mean_fluid_dice":0.2739, "irf_dice":0.2043, "srf_dice":0.1712, "ped_dice":0.4463,
+             "checkpoint_revision":"e17b3888c267d7d7e56dc35096cf72a0ca85a422"},
+            "作为补充病灶头；液体总负荷仍使用已校准模型", None,
+        ),
+        "runtime_ms": raw["runtime_ms"],
+    }
+
+
+def fundus_amd_pathology(image: Image.Image, image_path=None, **_) -> dict:
+    raw = _run_segmentation("fundus_amd_pathology", image_path)
+    findings = raw["findings"]
+    metrics = [
+        _metric(item["label"], round(float(item["positive_probability"]) * 100, 2), "%", item["status"])
+        for item in findings
+    ]
+    return {
+        "summary": "眼底彩照 AMD 表征筛查完成",
+        "findings": findings,
+        "metrics": metrics,
+        "quality": _quality(
+            "unverified", "公开权重已完成格式与数值校验", "AREDS 彩照风险因子模型；当前病例无配对真值",
+            {"reported_auc_large_drusen":0.94, "reported_auc_pigment":0.93, "reported_auc_late_amd":0.97,
+             "onnx_conversion_max_abs_error":3.6e-7},
+            "逐项显示概率与阳性/阴性状态", None,
+        ),
+        "runtime_ms": raw["runtime_ms"],
+    }
+
+
 lesion_recognition = disease_screening
 PIPELINES = {"quality-enhancement":quality_enhancement,"structure-segmentation":structure_segmentation,"disease-screening":disease_screening,"vascular-quantification":vascular_quantification,"fundus-lesion-quantification":fundus_lesion_quantification,"oct-fluid-quantification":oct_fluid_quantification}
