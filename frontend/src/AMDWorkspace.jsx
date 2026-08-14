@@ -12,7 +12,7 @@ const STEPS = [
   { id:'case', label:'病例整理', icon:Clock3 },
   { id:'tools', label:'影像分析', icon:ScanLine },
   { id:'vision', label:'综合复核', icon:Eye },
-  { id:'rag', label:'证据检索', icon:Database },
+  { id:'rag', label:'依据核验', icon:Database },
   { id:'decision', label:'方案评估', icon:Waypoints },
   { id:'report', label:'生成报告', icon:FileCheck2 },
 ];
@@ -118,7 +118,7 @@ function AMDWorkspace({ apiUrl }) {
 
     {!result ? <section className="amd-console">
       <aside className="case-context">
-        <div className="amd-panel-head"><span><Stethoscope size={14}/> 病例信息</span><b>论文去标识病例</b></div>
+        <div className="amd-panel-head"><span><Stethoscope size={14}/> 病例信息</span><b>内置示例病例</b></div>
         {caseData ? <>
           <h2>{caseData.case_id}</h2>
           <p className="case-title">{caseData.title}</p>
@@ -130,7 +130,7 @@ function AMDWorkspace({ apiUrl }) {
           </dl>
           <p className="case-narrative">{caseData.context}</p>
         </> : <div className="case-loading"><LoaderCircle size={20}/>正在加载病例</div>}
-        <div className="case-safety"><ShieldAlert size={15}/><span><b>影像需复核</b>默认图像来自论文缩略图，仅用于流程演示；论文指标与本地分析结果分开显示。</span></div>
+        <div className="case-safety"><ShieldAlert size={15}/><span><b>影像需复核</b>当前示例影像分辨率有限；历史记录与系统分析结果分开显示。</span></div>
       </aside>
 
       <section className="visit-matrix">
@@ -149,13 +149,13 @@ function AMDWorkspace({ apiUrl }) {
 
       <aside className="agent-launch">
         <div className="amd-panel-head"><span><BrainCircuit size={14}/> 分析流程</span><b>真实推理</b></div>
-        <div className="model-core"><span><BrainCircuit size={30}/><i/><em/></span><b>多模态分析</b><small>纵向影像与循证信息综合</small></div>
+        <div className="model-core"><span><BrainCircuit size={30}/><i/><em/></span><b>多模态分析</b><small>纵向影像与病历信息综合</small></div>
         <ul>
           <li><Check size={12}/>对比两次就诊的六张影像</li>
           <li><Check size={12}/>复核两次眼底彩照变化</li>
           <li><Check size={12}/>分割 OCT 液体、OCTA 血管与彩照病灶</li>
           <li><Check size={12}/>比较两次就诊的定量变化</li>
-          <li><Check size={12}/>检索相关随访证据</li>
+          <li><Check size={12}/>核验相关随访依据</li>
           <li><Check size={12}/>生成随访建议与操作规划</li>
         </ul>
         <button className="agent-run" disabled={loading || service.status !== 'ready'} onClick={runAgent}>
@@ -197,7 +197,7 @@ function AgentResult({ result, onReset }) {
             <article><small>影像综合</small><p>{structured.imaging_interpretation || report.imaging_interpretation}</p></article>
             <article><small>量化变化</small><p>{structured.quantitative_change || report.quantitative_change}</p></article>
             <article><small>随访安排</small><p>{recommendation.followup_schedule || report.followup_schedule}</p></article>
-            <article><small>证据结论</small><p>{recommendation.evidence_integration || report.evidence_integration}</p></article>
+            <article><small>决策依据</small><p>{recommendation.evidence_integration || report.evidence_integration}</p></article>
           </div>
           <div className="safety-triggers"><span><ShieldAlert size={16}/>需要升级处理的情况</span>{(report.safety_triggers || []).map((item,index)=><p key={index}>{item}</p>)}</div>
           {report.uncertainty && <p className="uncertainty"><AlertTriangle size={13}/>{report.uncertainty}</p>}
@@ -240,7 +240,7 @@ function AgentResult({ result, onReset }) {
 
         <section className="procedure-card">
           <div className="amd-panel-head"><span><Stethoscope size={14}/> 操作 / 手术规划</span><b>{procedure.status || '待专科确认'}</b></div>
-          <div className="procedure-status"><span><FileCheck2 size={20}/></span><div><small>{procedure.title || 'AMD 操作规划草案'}</small><strong>{procedure.procedure_overview?.candidate_route}</strong></div></div>
+          <div className="procedure-status"><span><FileCheck2 size={20}/></span><div><small>{procedure.title || 'AMD 操作规划'}</small><strong>{procedure.procedure_overview?.candidate_route}</strong></div></div>
           <p className="planning-rationale">{procedure.planning_rationale}</p>
           <div className="procedure-overview">
             <article><small>术眼</small><strong>{procedure.procedure_overview?.laterality}</strong></article>
@@ -265,7 +265,7 @@ function AgentResult({ result, onReset }) {
         </section>
 
         {result.reported_reference_biomarkers && <section className="biomarker-card reported-biomarkers">
-          <div className="amd-panel-head"><span><BookOpen size={14}/> 论文报告指标</span><b>未在本地重算</b></div>
+          <div className="amd-panel-head"><span><BookOpen size={14}/> 历史随访指标</span><b>与系统结果分列</b></div>
           <div className="reported-grid">
             <article><small>最佳矫正视力</small><strong>{result.reported_reference_biomarkers.bcva_decimal[0]} → {result.reported_reference_biomarkers.bcva_decimal[1]}</strong></article>
             <article><small>OCT 病灶面积</small><strong>{result.reported_reference_biomarkers.oct.candidate_lesion_area_mm2[0]} → {result.reported_reference_biomarkers.oct.candidate_lesion_area_mm2[1]} mm²</strong></article>
@@ -295,7 +295,7 @@ function AgentResult({ result, onReset }) {
           <p><Check size={13}/>真实推理已完成</p>
         </section>
         <section className="evidence-card">
-          <div className="amd-panel-head"><span><BookOpen size={14}/> 参考证据</span><b>{result.evidence.length} 条</b></div>
+          <div className="amd-panel-head"><span><BookOpen size={14}/> 决策依据</span><b>{result.evidence.length} 条</b></div>
           {result.evidence.map(item => <a href={item.url} target="_blank" rel="noreferrer" key={item.id}>
             <span>{item.id}</span><div><b>{item.title}</b><small>{item.source} / {item.year}</small></div><ChevronRight size={13}/>
           </a>)}

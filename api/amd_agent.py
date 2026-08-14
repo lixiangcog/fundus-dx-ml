@@ -50,18 +50,18 @@ DEFAULT_IMAGES = {
 }
 DEFAULT_CASE = {
     "case_id": "CASE_001",
-    "title": "论文 Figure 3 去标识纵向 nAMD 病例",
+    "title": "内置示例：纵向 nAMD 随访病例",
     "research_demo": True,
     "evidence_origin": "reported_reference",
-    "patient": {"age": 78, "sex": "女", "eye": "右眼", "diagnosis": "新生血管性 AMD（论文既往诊断）"},
-    "treatment": {"agent": "玻璃体腔抗 VEGF（具体药物未报告）", "injections": 5, "current_interval_weeks": "论文未报告"},
+    "patient": {"age": 78, "sex": "女", "eye": "右眼", "diagnosis": "新生血管性 AMD（既往诊断）"},
+    "treatment": {"agent": "玻璃体腔抗 VEGF（具体药物未记录）", "injections": 5, "current_interval_weeks": "未记录"},
     "visits": [
         {"id":"V0","label":"基线","date":"2024-03","bcva_decimal":0.3,
          "images":{"oct":"/research-samples/amd-v0-oct","octa":"/research-samples/amd-v0-octa","fundus":"/research-samples/amd-v0-fundus"}},
         {"id":"V1","label":"随访","date":"2024-06","bcva_decimal":0.5,
          "images":{"oct":"/research-samples/amd-v1-oct","octa":"/research-samples/amd-v1-octa","fundus":"/research-samples/amd-v1-fundus"}},
     ],
-    "context": "论文报告：78 岁女性右眼 nAMD，接受 5 次抗 VEGF 注射；2024-03 至 2024-06 视力与多模态影像标志物总体改善。",
+    "context": "病例记录：78 岁女性右眼 nAMD，接受 5 次抗 VEGF 注射；2024-03 至 2024-06 视力与多模态影像标志物总体改善。",
     "reference_biomarkers": {
         "provenance":"paper_reported_not_locally_recomputed",
         "oct":{"candidate_lesion_area_mm2":[2.38,1.28],"maximum_lesion_height_um":[413.4,354.9]},
@@ -69,7 +69,7 @@ DEFAULT_CASE = {
         "octa":{"cnv_candidate_area_mm2":[1.39,0.08],"followup_relative_to_baseline_percent":5.7},
         "bcva_decimal":[0.3,0.5]
     },
-    "image_quality": {"source":"paper_figure_crop","native_pixels":[93,99],"display_pixels":[564,594],"status":"review","reason":"论文图示缩略图被放大，仅用于工作流复现；不等同于原始 DICOM/OCT 体数据。"}
+    "image_quality": {"source":"paper_figure_crop","native_pixels":[93,99],"display_pixels":[564,594],"status":"review","reason":"当前示例影像分辨率有限，仅用于系统功能演示；不等同于原始 DICOM/OCT 体数据。"}
 }
 
 
@@ -425,8 +425,8 @@ def _build_procedure_plan(
         model_considerations = []
     default_considerations = [
         f"{eye}既往接受过 {case.get('treatment', {}).get('injections', '多')} 次眼内治疗，应核对既往疗效与不良事件记录",
-        "本例默认影像来自论文缩略图，任何靶区与活动性判断都需在原始 OCT/OCTA/眼底影像上复核",
-        "本地像素定量与论文报告指标来源不同，不能直接替代设备原生物理测量",
+        "当前示例影像分辨率有限，任何靶区与活动性判断都需在原始 OCT/OCTA/眼底影像上复核",
+        "系统像素定量与历史随访指标来源不同，不能直接替代设备原生物理测量",
     ]
     model_considerations = list(dict.fromkeys(
         [str(item).strip() for item in model_considerations + default_considerations if str(item).strip()]
@@ -445,7 +445,7 @@ def _build_procedure_plan(
     ))
 
     return {
-        "title": "AMD 操作 / 手术规划草案",
+        "title": "AMD 操作 / 手术规划",
         "status": "待视网膜专科医生确认",
         "planning_rationale": rationale,
         "procedure_overview": {
@@ -483,7 +483,7 @@ def _build_procedure_plan(
         "required_specialist_decisions": required_decisions,
         "evidence_ids": procedure_evidence,
         "quantitative_context": tools.get("deltas", {}),
-        "research_notice": "该内容为结构化研究草案，不是处方、手术医嘱或可直接执行的术式方案。",
+        "research_notice": "该内容为系统生成的辅助规划，需经视网膜专科确认；不是处方、手术医嘱或可直接执行的术式方案。",
     }
 
 
@@ -491,8 +491,8 @@ def _vision_prompt(case: dict, tool_results: dict) -> str:
     return f"""You are an ophthalmic imaging assistant. Compare six images in this exact order:
 1 baseline OCT; 2 baseline OCTA; 3 baseline color fundus; 4 follow-up OCT; 5 follow-up OCTA; 6 follow-up color fundus.
 Case context: {json.dumps(case, ensure_ascii=False)}
-Locally computed auxiliary deltas (not the paper reference biomarkers): {json.dumps(tool_results["deltas"], ensure_ascii=False)}
-Paper-reported reference biomarkers, when present: {json.dumps(case.get("reference_biomarkers"), ensure_ascii=False)}
+Locally computed auxiliary deltas (separate from the historical reference biomarkers): {json.dumps(tool_results["deltas"], ensure_ascii=False)}
+Historical reference biomarkers, when present: {json.dumps(case.get("reference_biomarkers"), ensure_ascii=False)}
 Describe only visible findings. Do not claim a clinical diagnosis and do not invent tests that are not shown.
 Compare retinal morphology and possible fluid-like spaces on OCT, macular flow network on OCTA, fundus macular appearance or hemorrhage cues, longitudinal change, and image quality.
 Return JSON only. All string values must be Simplified Chinese:
@@ -570,7 +570,7 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
     quality_status = "review" if native and min(native) < 224 else "passed"
     case_quality = {
         "status": quality_status,
-        "label": "论文图示缩略图需人工复核" if quality_status == "review" else "输入质量门槛通过",
+        "label": "示例影像分辨率有限，需人工复核" if quality_status == "review" else "输入质量门槛通过",
         "checks": {"six_distinct_images":distinct,"modalities_complete":len(saved_paths)==6,"decoded_dimensions":dimensions,"source_native_pixels":native},
         "reason": image_meta.get("reason", ""),
         "decision_measurements": "paper_reported_reference" if case.get("reference_biomarkers") else "locally_computed_tools",
@@ -639,10 +639,10 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
     reported = case.get("reference_biomarkers")
     if reported:
         report["treatment_response"] = (
-            f"论文报告视力由 {reported['bcva_decimal'][0]} 提升至 {reported['bcva_decimal'][1]}，"
+            f"历史记录显示视力由 {reported['bcva_decimal'][0]} 提升至 {reported['bcva_decimal'][1]}，"
             f"OCT 候选病灶面积由 {reported['oct']['candidate_lesion_area_mm2'][0]} 降至 {reported['oct']['candidate_lesion_area_mm2'][1]} mm²，"
             f"OCTA CNV 候选面积由 {reported['octa']['cnv_candidate_area_mm2'][0]} 降至 {reported['octa']['cnv_candidate_area_mm2'][1]} mm²；"
-            "总体符合论文所述改善。本地分割结果存在部分方向不一致，需在原始影像上复核。"
+            "总体提示病情改善。系统分割结果存在部分方向不一致，需在原始影像上复核。"
         )
     else:
         report["treatment_response"] = (
@@ -735,5 +735,5 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
             "evidence_retrieval": "BM25 over curated guideline evidence cards",
         },
         "runtime_ms": round((time.perf_counter() - started) * 1000, 1),
-        "notice": "科研与教学用途；默认病例来自论文 Figure 3 的去标识图示。论文报告数值与本地模型输出分开保存；任何临床行动必须由有资质的眼科医生结合原始影像确认。",
+        "notice": "本模块用于辅助分析；默认加载去标识的内置示例病例。历史随访记录与系统分析结果分开保存；任何临床行动必须由有资质的眼科医生结合原始影像确认。",
     }
