@@ -35,12 +35,20 @@ algorithm in the API and UI.
 - Note: measurements are in pixels. Physical units require device pixel spacing,
   layer/slab metadata and clinical quality control.
 
-## Quality enhancement reference
+## OCT quality enhancement
 
-- OpenCV: https://github.com/opencv/opencv (Apache-2.0)
-- Current deployable engine: calibrated non-local means denoising. Its fixed
-  synthetic-noise example is checked with paired PSNR and SSIM gains.
-- Note: the algorithm cannot recreate tissue information lost during acquisition.
+- Repository: https://github.com/DeweiHu/OCT_DDPM (MIT), pinned source commit
+  `8dfb2e6`.
+- Artifact: public checkpoint `DDPM_oct_dataset2_2021-07-08.pt`, stored locally
+  at `models/oct-enhancement/`.
+- Deployment: the OCT-specific diffusion network predicts the noise component
+  at fixed timestep `14`; it is not an unconstrained image generator.
+- Calibration: 22 Duke DME B-scans from two external-test subjects with fixed
+  paired synthetic noise. Metrics and selection rules are stored in
+  `benchmarks/oct_enhancement_v2.json` and `CALIBRATION_REPORT_V4.md`.
+- OpenCV (Apache-2.0) remains the conservative modality-aware path for OCTA and
+  color-fundus uploads without paired truth.
+- Note: no enhancement can recreate tissue information lost during acquisition.
 
 ## Fundus lesion localization and default examples
 

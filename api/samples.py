@@ -7,15 +7,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RUNTIME = PROJECT_ROOT / "runtime/research_samples"
 
 SAMPLES = {
-    "oct-enhancement-duke-s03-4": {
+    "oct-enhancement-duke-s10-32": {
         "pipeline_id": "quality-enhancement",
-        "path": RUNTIME / "duke_Subject_03_4_degraded_v2.png",
-        "reference_path": RUNTIME / "duke_Subject_03_4.png",
-        "title": "Duke DME · Subject 03 · B-scan 4（固定噪声退化）",
-        "source": "MIRAGE Duke DME prepared split",
+        "path": RUNTIME / "duke_Subject_10_scan32_noise12.png",
+        "reference_path": RUNTIME / "duke_Subject_10_scan32.png",
+        "title": "Duke DME · Subject 10 · B-scan 32（固定噪声退化）",
+        "source": "Duke DME public dataset",
         "license": "CC BY 4.0 (MIRAGE release metadata)",
         "reference_type": "paired synthetic degradation",
-        "split": "independent test subject",
+        "split": "external test subject; selected by fluid burden before enhancement evaluation",
     },
     "oct-structure-duke-s03-4": {
         "pipeline_id": "structure-segmentation",

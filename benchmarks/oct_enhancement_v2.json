@@ -1,0 +1,44 @@
+{
+  "evaluation": {
+    "dataset": "Duke DME external paired synthetic-noise evaluation",
+    "subjects": [9, 10],
+    "images": 22,
+    "noise_sigma": 12,
+    "fixed_timestep": 14,
+    "seed_base": 20260814,
+    "checkpoint_source_commit": "8dfb2e6",
+    "default_sample": "subject_10_scan_32",
+    "default_selection_rule": "largest manual fluid burden among the two external-test subjects; selected before enhancement scoring",
+    "quality_gate": "mean PSNR gain >= 3 dB, mean SSIM gain >= 0.10, and mean edge correlation does not decrease"
+  },
+  "summary": {
+    "input": {
+      "psnr_mean": 27.114241,
+      "ssim_mean": 0.621704,
+      "edge_correlation_mean": 0.877540,
+      "gradient_energy_ratio_mean": 1.323088,
+      "gradient_mae_mean": 31.038244
+    },
+    "nlm": {
+      "psnr_mean": 29.761432,
+      "ssim_mean": 0.671311,
+      "edge_correlation_mean": 0.899171,
+      "gradient_energy_ratio_mean": 0.443323,
+      "gradient_mae_mean": 35.160031
+    },
+    "oct_ddpm": {
+      "psnr_mean": 30.152738,
+      "ssim_mean": 0.756699,
+      "edge_correlation_mean": 0.900479,
+      "gradient_energy_ratio_mean": 0.805835,
+      "gradient_mae_mean": 24.863459
+    }
+  },
+  "mean_improvement": {
+    "psnr_db": 3.038498,
+    "ssim": 0.134995,
+    "edge_correlation": 0.022939,
+    "gradient_mae_percent": 19.902191
+  },
+  "cohort_gate_passed": true
+}

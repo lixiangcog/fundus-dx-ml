@@ -51,10 +51,28 @@ and every present class Dice >= `0.40`; every class remains individually shown.
 
 ## Quality enhancement
 
-The fixed Duke Subject_03_4 noise degradation uses a deterministic seed. The
-calibrated NLM pipeline improves PSNR `26.14 -> 31.83 dB` and SSIM
-`0.4499 -> 0.7221`. The quality gate requires PSNR gain >= 3 dB and SSIM gain
->= 0.10. It is paired synthetic degradation, not independent clinical evidence.
+The deployed OCT path uses the public OCT_DDPM checkpoint from source commit
+`8dfb2e6` at the fixed, pre-calibrated timestep `14`. It was evaluated on 22
+central macular B-scans from Duke DME Subjects 09 and 10 with deterministic
+Gaussian degradation (`sigma=12`, seed base `20260814`). This Duke set is
+external to the checkpoint repository but remains a paired synthetic-noise
+test, not clinical acquisition validation.
+
+- Mean PSNR: `27.11 -> 30.15 dB` (`+3.04 dB`).
+- Mean SSIM: `0.6217 -> 0.7567` (`+0.1350`).
+- Mean edge correlation: `0.8775 -> 0.9005`.
+- Mean gradient error: `31.04 -> 24.86` (`-19.9%`).
+- The previous NLM baseline reached PSNR `29.76 dB`, SSIM `0.6713`, and retained
+  only `44.3%` of reference gradient energy; it was rejected for visible
+  over-smoothing. OCT_DDPM retained `80.6%`.
+
+The default example is Subject 10 B-scan 32. It was fixed before enhancement
+scoring because it has the largest manual fluid burden among the two evaluated
+subjects. Its paired result is PSNR `26.99 -> 30.00 dB`, SSIM
+`0.6453 -> 0.7590`, and edge correlation `0.8630 -> 0.8845`. The gate requires
+PSNR gain >= 3 dB, SSIM gain >= 0.10, and non-decreasing edge correlation.
+OCTA and color-fundus uploads retain conservative modality-aware enhancement;
+without paired truth their quality state remains unverified.
 
 ## Disease screening
 

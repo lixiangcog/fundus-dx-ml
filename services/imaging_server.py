@@ -21,6 +21,8 @@ from pydantic import BaseModel, Field
 from safetensors.torch import load_file
 import torchseg
 
+from services.oct_ddpm import OCTDiffusionDenoiser
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_DIR = PROJECT_ROOT / "runtime"
 STATUS_FILE = RUNTIME_DIR / "imaging_service.json"
@@ -29,6 +31,7 @@ PORT = int(os.getenv("IMAGING_PORT", "8013"))
 FUNDUS_CHECKPOINT = PROJECT_ROOT / "models/fundus-lesions/model.safetensors"
 OCTA_CHECKPOINT = PROJECT_ROOT / "models/octa-vessels/30_model.pth"
 OCT_CHECKPOINT = PROJECT_ROOT / "models/oct-structure/duke_unet_v1.pth"
+OCT_ENHANCEMENT_CHECKPOINT = PROJECT_ROOT / "models/oct-enhancement/DDPM_oct_dataset2_2021-07-08.pt"
 INFERENCE_LOCK = threading.Lock()
 MODELS: dict[str, torch.nn.Module] = {}
 
@@ -49,7 +52,7 @@ IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
 
 class ImagingRequest(BaseModel):
     image: str = Field(min_length=1)
-    task: str = Field(pattern="^(fundus_lesions|octa_vessels|oct_structure)$")
+    task: str = Field(pattern="^(fundus_lesions|octa_vessels|oct_structure|oct_enhancement)$")
 
 
 def _token() -> str:
@@ -62,7 +65,7 @@ def _write_status(status: str, detail: str = "") -> None:
         "status": status,
         "host": socket.gethostname(),
         "port": PORT,
-        "model": "Fundus U-Net + OCTA DynUNet + Duke OCT U-Net",
+        "model": "Fundus U-Net + OCTA DynUNet + Duke OCT U-Net + OCT diffusion enhancement",
         "job_id": os.getenv("SLURM_JOB_ID", ""),
         "updated_at": time.time(),
         "detail": detail,
@@ -79,7 +82,11 @@ def _build_oct() -> UNet:
 
 
 def _load() -> None:
-    missing = [str(path) for path in (FUNDUS_CHECKPOINT, OCTA_CHECKPOINT, OCT_CHECKPOINT) if not path.is_file()]
+    missing = [
+        str(path) for path in
+        (FUNDUS_CHECKPOINT, OCTA_CHECKPOINT, OCT_CHECKPOINT, OCT_ENHANCEMENT_CHECKPOINT)
+        if not path.is_file()
+    ]
     if missing:
         raise RuntimeError("Missing calibrated checkpoint(s): " + ", ".join(missing))
 
@@ -103,7 +110,12 @@ def _load() -> None:
     oct_model = _build_oct()
     oct_model.load_state_dict(torch.load(OCT_CHECKPOINT, map_location="cpu", weights_only=False)["model"])
     oct_model.eval().cuda()
-    MODELS.update(fundus_lesions=fundus, octa_vessels=octa, oct_structure=oct_model)
+    oct_enhancement = OCTDiffusionDenoiser(OCT_ENHANCEMENT_CHECKPOINT, timestep=14)
+    oct_enhancement.eval().cuda()
+    MODELS.update(
+        fundus_lesions=fundus, octa_vessels=octa,
+        oct_structure=oct_model, oct_enhancement=oct_enhancement,
+    )
 
 
 def _allowed_path(raw_path: str) -> Path:
@@ -205,6 +217,17 @@ def _oct_infer(image: Image.Image) -> dict:
     }
 
 
+def _oct_enhancement_infer(image: Image.Image) -> dict:
+    with torch.inference_mode():
+        enhanced = MODELS["oct_enhancement"].enhance(image)
+    return {
+        "model": "OCT DDPM public checkpoint",
+        "enhanced_png": _png64(enhanced, "L"),
+        "timestep": MODELS["oct_enhancement"].timestep,
+        "input_size": [image.width, image.height],
+    }
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     _write_status("loading")
@@ -224,7 +247,7 @@ app = FastAPI(title="RetinaScope calibrated imaging service", version="1.0.0", l
 @app.get("/health")
 def health():
     return {
-        "status": "ready" if len(MODELS) == 3 else "loading",
+        "status": "ready" if len(MODELS) == 4 else "loading",
         "models": sorted(MODELS), "device": "cuda",
         "job_id": os.getenv("SLURM_JOB_ID", ""),
     }
@@ -244,6 +267,7 @@ def infer(request: ImagingRequest, x_agent_token: str = Header(default="")):
             "fundus_lesions": _fundus_infer,
             "octa_vessels": _octa_infer,
             "oct_structure": _oct_infer,
+            "oct_enhancement": _oct_enhancement_infer,
         }[request.task](image)
     return {
         "task": request.task, **result,

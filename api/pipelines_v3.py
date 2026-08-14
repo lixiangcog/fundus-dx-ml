@@ -18,9 +18,10 @@ from api.imaging_client import infer as gpu_infer
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OCT_BENCHMARK = PROJECT_ROOT / "benchmarks/oct_structure_v1.json"
 IDRID_BENCHMARK = PROJECT_ROOT / "benchmarks/idrid_lesions_v1.json"
+OCT_ENHANCEMENT_BENCHMARK = PROJECT_ROOT / "benchmarks/oct_enhancement_v2.json"
 
 CAPABILITIES = [
-    {"id":"quality-enhancement","number":"01","title":"质量增强","english":"QUALITY ENHANCEMENT","modalities":["OCT","OCTA","眼底彩照"],"default_modality":"OCT","engine":"Calibrated NLM · v1","engine_type":"algorithm","method":"固定噪声模型标定的非局部均值去噪","license":"Apache-2.0","source_url":"https://github.com/opencv/opencv","sample_id":"oct-enhancement-duke-s03-4","sample_url":"/research-samples/oct-enhancement-duke-s03-4","output":"增强影像 + 配对 PSNR / SSIM","status":"validated"},
+    {"id":"quality-enhancement","number":"01","title":"质量增强","english":"QUALITY ENHANCEMENT","modalities":["OCT","OCTA","眼底彩照"],"default_modality":"OCT","engine":"OCT diffusion enhancement · v2","engine_type":"pretrained_model","method":"OCT 专用扩散去噪 + 模态自适应增强","license":"MIT","source_url":"https://github.com/DeweiHu/OCT_DDPM","sample_id":"oct-enhancement-duke-s10-32","sample_url":"/research-samples/oct-enhancement-duke-s10-32","output":"增强影像 + 配对 PSNR / SSIM / 边缘保持","status":"validated"},
     {"id":"structure-segmentation","number":"02","title":"OCT 结构分割","english":"OCT STRUCTURE SEGMENTATION","modalities":["OCT"],"default_modality":"OCT","engine":"Duke residual U-Net · v1","engine_type":"trained_model","method":"8 层结构 + 液体的十类像素级分割","license":"Research model / CC BY 4.0 data release","source_url":"https://github.com/ClinicalAI/MIRAGE","sample_id":"oct-structure-duke-s03-4","sample_url":"/research-samples/oct-structure-duke-s03-4","output":"层结构叠加 + Dice / IoU / 厚度代理","status":"validated"},
     {"id":"disease-screening","number":"03","title":"眼底疾病筛查","english":"FUNDUS DISEASE SCREENING","modalities":["眼底彩照"],"default_modality":"眼底彩照","engine":"FundusDx ResNet18 · v2","engine_type":"trained_model","method":"AMD / 白内障 / 糖网 / 正常四分类 + CAM","license":"Project model","source_url":"https://github.com/lixiangcog/fundus-dx-ml","sample_id":"fundus-screen-idrid-67","sample_url":"/research-samples/fundus-screen-idrid-67","output":"筛查概率 + CAM（非病灶掩膜）","status":"validated"},
     {"id":"vascular-quantification","number":"04","title":"OCTA 微血管定量","english":"OCTA VASCULAR QUANTIFICATION","modalities":["OCTA"],"default_modality":"OCTA","engine":"Pretrained DynUNet · epoch 30","engine_type":"pretrained_model","method":"深度血管分割 + 骨架、分支、密度量化","license":"MIT","source_url":"https://github.com/aiforvision/OCTA-autosegmentation","sample_id":"octa-vessels-sgan-232653","sample_url":"/research-samples/octa-vessels-sgan-232653","output":"血管掩膜 + Dice / IoU + 微血管形态学","status":"reference_validated"},
@@ -85,22 +86,73 @@ def _psnr(first: np.ndarray, second: np.ndarray) -> float:
     return 99.0 if mse == 0 else float(20*np.log10(255.0/np.sqrt(mse)))
 
 
-def quality_enhancement(image: Image.Image, reference=None, **_) -> dict:
+def _gradient_metrics(truth: np.ndarray, image: np.ndarray) -> dict:
+    def gradient(value: np.ndarray) -> np.ndarray:
+        value=value.astype(np.float32)
+        return cv2.magnitude(cv2.Sobel(value,cv2.CV_32F,1,0,ksize=3),cv2.Sobel(value,cv2.CV_32F,0,1,ksize=3))
+    truth_gradient,image_gradient=gradient(truth),gradient(image); region=truth>10
+    return {
+        "correlation":float(np.corrcoef(truth_gradient.ravel(),image_gradient.ravel())[0,1]),
+        "energy_ratio":float(image_gradient[region].mean()/max(float(truth_gradient[region].mean()),1e-6)),
+        "mae":float(np.mean(np.abs(image_gradient[region]-truth_gradient[region]))),
+    }
+
+
+def _looks_like_oct(rgb: np.ndarray) -> bool:
+    chroma=float(np.mean(np.max(rgb,axis=2).astype(np.float32)-np.min(rgb,axis=2).astype(np.float32)))
+    if chroma>4.0: return False
+    gray=cv2.cvtColor(rgb,cv2.COLOR_RGB2GRAY).astype(np.float32)
+    horizontal=float(np.mean(np.abs(cv2.Sobel(gray,cv2.CV_32F,0,1,ksize=3))))
+    vertical=float(np.mean(np.abs(cv2.Sobel(gray,cv2.CV_32F,1,0,ksize=3))))
+    return rgb.shape[1]/max(rgb.shape[0],1)>=1.02 or horizontal/max(vertical,1e-6)>=1.18
+
+
+def _enhance_non_oct(rgb: np.ndarray) -> tuple[np.ndarray,np.ndarray,str]:
+    gray=cv2.cvtColor(rgb,cv2.COLOR_RGB2GRAY)
+    chroma=float(np.mean(np.max(rgb,axis=2).astype(np.float32)-np.min(rgb,axis=2).astype(np.float32)))
+    if chroma<=4.0:
+        denoised=cv2.bilateralFilter(gray,5,28,4)
+        enhanced_gray=cv2.createCLAHE(clipLimit=1.45,tileGridSize=(8,8)).apply(denoised)
+        smooth=cv2.GaussianBlur(enhanced_gray,(0,0),1.0)
+        enhanced_gray=cv2.addWeighted(enhanced_gray,1.12,smooth,-.12,0)
+        return cv2.cvtColor(enhanced_gray,cv2.COLOR_GRAY2RGB),enhanced_gray,"OCTA"
+    lab=cv2.cvtColor(rgb,cv2.COLOR_RGB2LAB)
+    luminance=cv2.fastNlMeansDenoising(lab[:,:,0],None,h=5,templateWindowSize=7,searchWindowSize=21)
+    lab[:,:,0]=cv2.createCLAHE(clipLimit=1.35,tileGridSize=(8,8)).apply(luminance)
+    enhanced=cv2.cvtColor(lab,cv2.COLOR_LAB2RGB)
+    return enhanced,cv2.cvtColor(enhanced,cv2.COLOR_RGB2GRAY),"眼底彩照"
+
+
+def quality_enhancement(image: Image.Image, image_path=None, reference=None, **_) -> dict:
     started=time.perf_counter(); rgb=np.asarray(_limit_image(image,1000)); gray=cv2.cvtColor(rgb,cv2.COLOR_RGB2GRAY)
-    enhanced_gray=cv2.fastNlMeansDenoising(gray,None,h=12,templateWindowSize=7,searchWindowSize=21)
-    if np.max(np.abs(rgb[:,:,0].astype(int)-rgb[:,:,1].astype(int))) < 3:
-        enhanced=cv2.cvtColor(enhanced_gray,cv2.COLOR_GRAY2RGB)
+    if _looks_like_oct(rgb):
+        raw=_run_segmentation("oct_enhancement",image_path)
+        enhanced_gray=_decode_png64(raw["enhanced_png"])
+        enhanced=cv2.cvtColor(enhanced_gray,cv2.COLOR_GRAY2RGB); mode="OCT"
     else:
-        lab=cv2.cvtColor(rgb,cv2.COLOR_RGB2LAB); lab[:,:,0]=enhanced_gray; enhanced=cv2.cvtColor(lab,cv2.COLOR_LAB2RGB)
+        enhanced,enhanced_gray,mode=_enhance_non_oct(rgb)
     metrics=[_metric("输出分辨率",f"{enhanced.shape[1]}×{enhanced.shape[0]}","px")]
     if reference and Path(reference["reference_path"]).is_file():
         truth=cv2.resize(np.asarray(Image.open(reference["reference_path"]).convert("L")),(gray.shape[1],gray.shape[0]))
-        bp,ap=_psnr(truth,gray),_psnr(truth,enhanced_gray); bs,ass=_ssim(truth,gray),_ssim(truth,enhanced_gray); passed=(ap-bp)>=3.0 and (ass-bs)>=0.10
-        metrics=[_metric("PSNR",round(ap,2),"dB",f"增强前 {bp:.2f} dB"),_metric("SSIM",round(ass,4),"",f"增强前 {bs:.4f}"),_metric("PSNR 增益",round(ap-bp,2),"dB"),_metric("SSIM 增益",round(ass-bs,4))]
-        quality=_quality("passed" if passed else "failed","配对参考通过" if passed else "配对参考未通过","固定噪声退化；非独立临床测试",{"psnr_before":bp,"psnr_after":ap,"ssim_before":bs,"ssim_after":ass},"PSNR 增益 ≥ 3 dB 且 SSIM 增益 ≥ 0.10",reference)
+        bp,ap=_psnr(truth,gray),_psnr(truth,enhanced_gray); bs,ass=_ssim(truth,gray),_ssim(truth,enhanced_gray)
+        before_edge,after_edge=_gradient_metrics(truth,gray),_gradient_metrics(truth,enhanced_gray)
+        passed=(ap-bp)>=3.0 and (ass-bs)>=.10 and after_edge["correlation"]>=before_edge["correlation"]
+        benchmark=json.loads(OCT_ENHANCEMENT_BENCHMARK.read_text()); cohort=benchmark["summary"]["oct_ddpm"]
+        cohort_before=benchmark["summary"]["input"]
+        metrics=[
+            _metric("PSNR",round(ap,2),"dB",f"增强前 {bp:.2f} dB"),
+            _metric("SSIM",round(ass,4),"",f"增强前 {bs:.4f}"),
+            _metric("边缘一致性",round(after_edge["correlation"],4),"",f"增强前 {before_edge['correlation']:.4f}"),
+            _metric("外部测试均值",f"{cohort['psnr_mean']:.2f} / {cohort['ssim_mean']:.4f}","",f"22 张 · 增强前 {cohort_before['psnr_mean']:.2f} / {cohort_before['ssim_mean']:.4f}"),
+        ]
+        evidence={
+            "default":{"psnr_before":bp,"psnr_after":ap,"ssim_before":bs,"ssim_after":ass,"edge_before":before_edge,"edge_after":after_edge},
+            "external_duke_test":benchmark["evaluation"],"cohort":benchmark["summary"],
+        }
+        quality=_quality("passed" if passed else "failed","外部配对测试通过" if passed else "配对质量门槛未通过","Duke DME 外部测试 2 位受试者 / 22 张 B-scan；固定合成噪声",evidence,"PSNR 增益 ≥ 3 dB、SSIM 增益 ≥ 0.10 且边缘一致性不下降",reference)
     else:
-        quality=_quality("unverified","无真值上传","仅无参考清晰度代理",{"laplacian_variance":float(cv2.Laplacian(enhanced_gray,cv2.CV_32F).var())},"不作准确度结论",None)
-    return {"summary":"结构保持去噪完成","result_image":_png_data_url(enhanced),"auxiliary_images":[{"label":"增强前","image":_png_data_url(rgb)}],"metrics":metrics,"quality":quality,"runtime_ms":round((time.perf_counter()-started)*1000,1),"notice":"默认指标只验证固定噪声退化；真实低质量扫描需匹配设备噪声重新标定。"}
+        quality=_quality("unverified","无真值上传",f"{mode} 无参考质量代理",{"laplacian_variance":float(cv2.Laplacian(enhanced_gray,cv2.CV_32F).var())},"不作准确度结论",None)
+    return {"summary":"影像质量增强完成","result_image":_png_data_url(enhanced),"auxiliary_images":[{"label":"增强前","image":_png_data_url(rgb)}],"metrics":metrics,"quality":quality,"enhancement_mode":mode,"runtime_ms":round((time.perf_counter()-started)*1000,1),"notice":"默认病例已做 22 张外部配对测试；上传影像无真值时仅提供增强结果，不作临床质量结论。"}
 
 
 def _run_segmentation(task: str, image_path: Path | None) -> dict:

@@ -8,7 +8,7 @@ three inference services run inside one dedicated Slurm job:
 - allocation: `1 GPU`, `16 CPU cores`, `64 GB host memory`
 - time limit: 7 days
 - services: multimodal inference on port 8011, fundus specialist inference on
-  port 8012, and pixel segmentation on port 8013
+  port 8012, and image enhancement plus pixel segmentation on port 8013
 
 The CPU web job starts `scripts/gpu_stack_watchdog.sh`. The watchdog checks the
 Slurm queue every 45 seconds and submits the GPU stack when no running or
