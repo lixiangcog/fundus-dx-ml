@@ -1,0 +1,124 @@
+/* 视觉主题覆盖：仅调整颜色、圆角、阴影与可读性，不改变组件结构。 */
+:root{
+  --cyan:#6c2cf3;
+  --cyan2:#8c5cff;
+  --line:rgba(108,44,243,.17);
+  --muted:#707184;
+  --panel:#fff;
+  --ink:#1d1e2c;
+  color:#1d1e2c;
+  background:#f7f7fb;
+}
+html,body,#root{background:#f7f7fb;color:#1d1e2c}
+button,input{border-radius:10px}
+button:focus-visible,input:focus-visible{outline:2px solid #b79df5;outline-offset:2px}
+.app-shell{background:radial-gradient(circle at 12% 8%,rgba(140,92,255,.09),transparent 27%),linear-gradient(180deg,#fbfbfe,#f6f5fb 72%,#fafafe)}
+.ambient-grid{opacity:.42}
+.ambient-grid:before{background-image:linear-gradient(rgba(108,44,243,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(108,44,243,.035) 1px,transparent 1px)}
+.ambient-grid:after{border-color:rgba(108,44,243,.06);box-shadow:0 0 0 100px rgba(108,44,243,.016),0 0 0 220px rgba(108,44,243,.01)}
+.ambient-grid span{background:linear-gradient(90deg,transparent,var(--cyan),transparent)}
+
+/* 顶部导航 */
+.topbar{background:rgba(255,255,255,.94);border-bottom-color:#ecebf4;box-shadow:0 10px 34px rgba(38,31,70,.055)}
+.topbar:before{height:3px;background:linear-gradient(90deg,var(--cyan),#a889ff,transparent);box-shadow:none}
+.brand-mark{border:0;clip-path:none;border-radius:11px;background:var(--cyan);color:#fff;box-shadow:0 8px 20px rgba(108,44,243,.22)}
+.brand strong{color:#171822;text-shadow:none}.brand strong.accent{color:var(--cyan)}.brand small{color:#78798a}
+.workspace-switch{border-color:#e6e3f2;background:#f7f6fd;border-radius:14px;padding:4px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.6)}
+.workspace-switch button{height:45px;border:0;border-radius:10px;color:#68697a}
+.workspace-switch button.active{color:#fff;background:var(--cyan);box-shadow:0 8px 18px rgba(108,44,243,.22)}
+.workspace-switch button.active:after{display:none}
+.header-meta small{color:#8c8d9d}.header-meta b{color:#444555}.header-meta .service b{color:var(--cyan)}
+
+main{padding-top:32px}
+.eyebrow{color:var(--cyan)}
+.station-heading h1,.amd-hero h1,.systemic-station-head h2{color:#1d1e2c}
+.station-heading h1 em,.amd-hero h1 em,.systemic-station-head h2 em{color:#6f7083}
+.station-heading>p,.amd-hero>div:first-child>p{color:#67687b;border-left-color:var(--cyan);font-size:14px}
+
+/* 总览：深灰与浅薰衣草紫交替，对应参考图 */
+.command-overview{gap:14px;border:0;background:transparent;border-radius:18px;overflow:visible}
+.command-overview:before,.command-overview:after{display:none}
+.analysis-core{border:0;border-radius:18px;background:#373849;overflow:hidden;box-shadow:0 16px 42px rgba(41,40,59,.12)}
+.analysis-core:after{background:linear-gradient(90deg,#a277ff,rgba(162,119,255,.12));box-shadow:none}
+.overview-lines span{background:rgba(108,44,243,.14)}
+.core-ring{border-color:rgba(162,119,255,.42)}
+.ring-one:before,.ring-one:after{border-color:rgba(162,119,255,.19)}
+.ring-one i{background:#373849;border-color:#a277ff;box-shadow:0 0 12px rgba(162,119,255,.7)}
+.ring-two{border-color:#a277ff;box-shadow:inset 0 0 30px rgba(108,44,243,.07),0 0 25px rgba(108,44,243,.06)}
+.core-center{background:radial-gradient(circle,rgba(140,92,255,.27),rgba(55,56,73,.95) 64%);border-color:#a277ff;box-shadow:inset 0 0 38px rgba(140,92,255,.16),0 0 30px rgba(108,44,243,.12)}
+.core-center small{color:#d1c6f5}.core-center strong{color:#fff;text-shadow:none}.core-center span{color:#c4a8ff;border-color:#9270ec;background:rgba(108,44,243,.12)}
+.capability-map{border-radius:18px;background:#f0efff;box-shadow:0 16px 42px rgba(41,40,59,.06)}
+.overview-heading{border-bottom-color:#ddd9f5}.overview-heading:after{box-shadow:none}.overview-heading span{color:#20212e}.overview-heading b{color:#77788b}
+.capability-spine{background:linear-gradient(transparent,var(--cyan) 12%,var(--cyan) 88%,transparent);box-shadow:none}
+.capability-grid button{border:1px solid #dedaf4;border-left:3px solid #c7b6f8;border-radius:13px;clip-path:none;background:rgba(255,255,255,.8);color:#5f6072;box-shadow:0 6px 18px rgba(50,43,86,.035)}
+.capability-grid button:before{background:rgba(108,44,243,.28)}
+.capability-grid button:hover,.capability-grid button.active{border-color:#a98af8;border-left-color:var(--cyan);color:#1d1e2c;background:#fff;box-shadow:0 10px 24px rgba(80,54,150,.10)}
+.capability-grid button.active:after{box-shadow:none}.capability-symbol{border-color:#d8d1f5;border-radius:9px;color:#765cae}.capability-number,.capability-copy small{color:#858399}
+.state-dot{background:#9895a8}
+.overview-status{margin-top:0;margin-bottom:0;border:0;border-radius:18px;background:#373849;box-shadow:0 16px 42px rgba(41,40,59,.12)}
+.overview-status:before{background-image:linear-gradient(rgba(162,119,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(162,119,255,.04) 1px,transparent 1px)}
+.overview-status .overview-heading{border-color:rgba(255,255,255,.12)}.overview-status .overview-heading span{color:#fff}.overview-status .overview-heading b{color:#b8b8c7}
+.readiness-score{border-color:rgba(255,255,255,.09)}.readiness-score strong{color:#fff;text-shadow:none}.readiness-score span,.overview-status li{color:#d2d2dc}.readiness-bars{border-color:rgba(255,255,255,.09)}.readiness-bars i{background:#4b4c60}.overview-status li{border-color:rgba(255,255,255,.07);font-size:12px}
+.overview-status>button{border:0;border-radius:10px;clip-path:none;background:var(--cyan);color:#fff;box-shadow:0 8px 20px rgba(108,44,243,.25)}
+
+/* 分析工作台 */
+.pipeline-nav{gap:4px;border:1px solid #e8e5f2;border-radius:15px;padding:5px;background:#fff;box-shadow:0 12px 32px rgba(42,35,75,.055)}
+.pipeline-nav button{border:0;border-radius:10px;color:#646577}
+.pipeline-nav button:hover,.pipeline-nav button.active{background:#f0efff;color:#232431}
+.pipeline-nav button.active:after{height:3px;bottom:2px;box-shadow:none}.pipeline-icon{border-color:#ddd8f2;border-radius:9px;color:#7965a7}.pipeline-nav button.active .pipeline-icon{box-shadow:none;background:#fff}
+.workbench{gap:12px;border:0;background:transparent}
+.engine-panel,.visual-stage,.metrics-panel{border:1px solid #e8e5f2;border-radius:16px;background:#fff;box-shadow:0 12px 34px rgba(42,35,75,.055)}
+.engine-panel{border-left-color:#e8e5f2;border-right-color:#e8e5f2}.metrics-panel{background:#f0efff;border-color:#e0dcf4}
+.panel-kicker,.stage-head>span{color:#555668;font-size:12px}.engine-panel h2{color:#1e1f2d}.task-summary{border-color:#e8e5f2;color:#626376;font-size:14px}.engine-type{color:#696a7d;font-size:12px}
+.modality-tags span{border-color:#ddd8f2;border-radius:8px;color:#727386;background:#faf9ff}.modality-tags span.primary{border-color:#b69afa;background:#eee9ff}
+.image-frame,.systemic-image-frame{border-color:#5b5c70;border-radius:13px;background:#373849;box-shadow:inset 0 0 0 1px rgba(255,255,255,.035)}
+.image-frame:before,.systemic-image-frame:before{background-image:linear-gradient(rgba(162,119,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(162,119,255,.04) 1px,transparent 1px)}
+.input-actions button,.systemic-actions button{border-color:#dcd6f2;border-radius:10px;background:#f7f5ff;color:#5f5479;font-size:12px}
+.input-actions button:hover,.systemic-actions button:hover{border-color:#9b75f7;background:#eee8ff}
+.data-bridge span,.systemic-bridge i{background:#f0efff;border-color:#a98af8}.data-bridge:before,.systemic-bridge:before{background:linear-gradient(transparent,rgba(108,44,243,.42),transparent)}
+.run-button,.systemic-run,.agent-run{border:0;border-radius:10px;clip-path:none;background:var(--cyan);color:#fff;box-shadow:0 9px 22px rgba(108,44,243,.22)}
+.run-button:hover:not(:disabled),.systemic-run:hover:not(:disabled){background:#5d20dd;box-shadow:0 10px 24px rgba(108,44,243,.28)}
+.result-data h3{color:#1d1e2c;font-size:18px}.quality-gate{border-color:#d1c4f6;border-radius:11px;background:rgba(255,255,255,.72);font-size:11px}.quality-gate p,.quality-gate small{color:#666779}
+.metric-list{border-color:#dcd7ef}.metric-list>div{min-height:64px;border-color:#ded9ef}.metric-list span{color:#4f5062;font-size:13px}.metric-list span small{color:#77788a;font-size:10px;max-width:155px}.metric-list strong{color:#20212e;font-size:26px;text-shadow:none}.metric-list em{font-size:10px}
+.probability-mini span,.probability-mini strong{color:#5d5e70;font-size:10px}.probability-mini i{background:#d8d3ed}.result-notice{color:#646578;font-size:11px;border-radius:9px;background:rgba(255,255,255,.6)}
+.metric-placeholder p{color:#77788a;font-size:12px}footer{color:#77788a;font-size:10px}
+
+/* AMD 随访 */
+.agent-service{border-color:#ded9f1;border-radius:13px;clip-path:none;background:#fff;box-shadow:0 10px 28px rgba(42,35,75,.055)}
+.agent-service>span{border-color:#cbbbf5;border-radius:9px}.agent-service small{color:#77788a}.agent-flow{gap:4px;border:1px solid #e5e2f0;border-radius:15px;padding:5px;background:#fff;box-shadow:0 12px 32px rgba(42,35,75,.05)}
+.flow-step{border-radius:10px}.flow-step>span{border-color:#ddd8ed;border-radius:8px;color:#868697}.flow-step small{color:#9494a2;font-size:9px}.flow-step b{color:#555667;font-size:13px}.flow-step.complete b,.flow-step.active b{color:#20212e}
+.amd-console{gap:12px;border:0;background:transparent}.case-context,.visit-matrix,.agent-launch{border:1px solid #e7e4f1;border-radius:16px;background:#fff;box-shadow:0 12px 34px rgba(42,35,75,.055)}.agent-launch{background:#f0efff;border-color:#ded9f2}
+.amd-panel-head{color:#5f6071;font-size:10px}.amd-panel-head>b{border-color:#cbb9f7;border-radius:7px;background:#f0ebff;font-size:9px}
+.case-context h2{color:#1e1f2c}.case-title{font-size:12px}.case-facts{border-color:#e8e5f0}.case-facts>div{border-color:#eeecf4}.case-facts dt{color:#77788a;font-size:10px}.case-facts dd{color:#424354;font-size:12px}.case-narrative{color:#626376;font-size:12px}.case-safety,.safety-triggers,.quality-warning{border-radius:9px;background:#fff8ed}
+.visit-title{border-color:#e6e2ef}.visit-title b{color:#252633;font-size:14px}.visit-title small{color:#77788a;font-size:10px}.visit-title>span{border-radius:7px;clip-path:none;color:#fff}.visit-image{border-color:#58596c;border-radius:11px;background:#373849}.visit-image span{border-radius:6px;background:rgba(55,56,73,.86);color:#fff;font-size:9px}
+.model-core b{color:#242532}.model-core small{color:#717285;font-size:10px}.agent-launch li{border-color:#ddd8ed;color:#555668;font-size:12px}.agent-launch>p{color:#6e6f80;font-size:10px}
+.decision-banner,.report-card,.biomarker-card,.options-card,.trace-card,.evidence-card,.structured-report-card,.segmentation-card,.procedure-card{border-color:#e5e2ef;border-radius:16px;background:#fff;box-shadow:0 12px 34px rgba(42,35,75,.05)}
+.decision-banner{background:linear-gradient(110deg,#f0efff,#fff)}.decision-icon,.trace-row>span,.procedure-status>span{border-radius:10px}.decision-banner h2{color:#1e1f2c;font-size:20px}.decision-banner p{color:#5e5f71;font-size:13px}.decision-score{border-color:#dcd7ec}.decision-score small{color:#77788a;font-size:9px}.decision-score span{color:#545566;font-size:11px}.decision-banner>button{border-color:#cfc5ea;border-radius:9px;color:#5f5873;font-size:11px}
+.report-sections article{border-color:#e9e6f0}.report-sections small{font-size:11px}.report-sections p{color:#4f5062;font-size:13px;line-height:1.85}.safety-triggers p{color:#6c6256;font-size:11px}.uncertainty{color:#626376;font-size:11px}
+.structured-summary-grid article,.reported-grid article,.visit-segmentation,.longitudinal-deltas,.procedure-status,.procedure-checklists>section,.biomarker-visits>div{border-color:#e3dff0;border-radius:11px;background:#f8f7ff}
+.structured-summary-grid small{font-size:11px}.structured-summary-grid strong{color:#20212e;font-size:17px}.structured-summary-grid p{color:#515264;font-size:13px}
+.visit-segmentation>header,.visit-quant-grid,.delta-heading{border-color:#dfdaed}.visit-segmentation>header strong{color:#262734;font-size:13px}.visit-segmentation>header small{color:#77788a;font-size:10px}.segmentation-gallery figure{border-color:#5a5b6e;border-radius:9px;background:#373849}.segmentation-gallery figcaption{border-radius:5px;color:#fff;background:rgba(55,56,73,.88);font-size:9px}
+.visit-quant-grid small,.longitudinal-deltas article small{color:#6f7081;font-size:9px}.visit-quant-grid strong,.longitudinal-deltas article strong{color:#242532;font-size:18px}.delta-heading span{color:#323341;font-size:12px}.delta-heading small{color:#77788a;font-size:10px}
+.procedure-status strong,.procedure-overview strong,.procedure-checklists h3{color:#30313f;font-size:12px}.procedure-status small,.procedure-overview small{font-size:10px}.planning-rationale{color:#555668;font-size:13px}.procedure-overview{border-color:#e3dfed;border-radius:10px;overflow:hidden}.procedure-overview article{border-color:#e3dfed}.procedure-checklists li{border-color:#e7e3ef;color:#565769;font-size:11px}
+.biomarker-visits h3{color:#4e4f61;font-size:12px}.biomarker-visits dt{color:#77788a;font-size:9px}.biomarker-visits dd{color:#292a37;font-size:12px}.option-row,.trace-row,.evidence-card>a{border-color:#e8e5ef}.option-row b{color:#414252;font-size:11px}.option-row>span,.option-row em{font-size:10px}.option-row.selected{background:linear-gradient(90deg,#f0efff,transparent)}.option-row.selected b,.option-row.selected em{color:#252633}.trace-row small{color:#77788a;font-size:9px}.trace-row b{color:#444556;font-size:11px}.trace-row em{font-size:9px}.trace-card>p{border-color:#d8cdf4;border-radius:9px;background:#f6f3ff;font-size:10px}.evidence-card a b{color:#464758;font-size:11px}.evidence-card a small{color:#77788a;font-size:9px}.evidence-card>a>span{border-radius:7px}
+
+/* 眼龄、心血管、脑血管统一为紫色体系 */
+.systemic-workspace.systemic-eye-age,.systemic-workspace.systemic-cardiovascular-retina,.systemic-workspace.systemic-cerebrovascular-retina{--module:#6c2cf3;--module-rgb:108,44,243}
+.systemic-command{border:0;border-radius:18px;background:#373849;box-shadow:0 16px 42px rgba(41,40,59,.12)}
+.systemic-title h1{color:#fff;text-shadow:none}.systemic-title p{color:#d1d1dc}.systemic-core>div{background:radial-gradient(circle,rgba(140,92,255,.26),rgba(55,56,73,.96) 66%);color:#c4a8ff}.systemic-core>div b{color:#fff}.systemic-core>div small{color:#cbc4df}.systemic-steps b{color:#f2f1f8}.systemic-steps span{color:#aaa9b9}.systemic-validation{border:0;border-radius:14px;clip-path:none;background:#f0efff}.systemic-validation span{color:var(--module)}.systemic-validation b{color:#252633}.systemic-validation small{color:#6f7081}
+.systemic-station-head>p{border-color:#ded9ef;border-radius:9px;background:#fff;color:#67687a;font-size:11px}.systemic-grid{gap:12px;border:0;background:transparent}.systemic-input,.systemic-output,.systemic-metrics{border:1px solid #e7e4f0;border-radius:16px;background:#fff;box-shadow:0 12px 34px rgba(42,35,75,.05)}.systemic-metrics{background:#f0efff;border-color:#dfdaf2}.systemic-panel-head{color:#555668}.systemic-panel-head>span{font-size:12px}.systemic-panel-head small{color:#77788a;font-size:10px}.age-input{border-color:#dfdaef;border-radius:0 0 10px 10px;color:#555668;font-size:12px;background:#faf9ff}.age-input input{border-color:#d1c6ef;border-radius:7px;background:#fff;color:#292a38}
+.view-switch{border-color:#dfdaee;border-radius:0 0 10px 10px;overflow:hidden}.view-switch button{border-color:#dfdaee;color:#68697b;font-size:10px}.view-switch button.active{background:#eee9ff}
+.systemic-quality{border-color:#d1c4f6;border-radius:10px;background:rgba(255,255,255,.74)}.systemic-quality span{font-size:11px}.systemic-quality small{color:#6d6e80;font-size:10px}.systemic-result-copy h3{color:#222330;font-size:18px}.systemic-metric-list{border-color:#dbd6ec}.systemic-metric-list>div{min-height:66px;border-color:#ddd8eb}.systemic-metric-list span{color:#4d4e60;font-size:13px}.systemic-metric-list span small{color:#77788a;font-size:10px}.systemic-metric-list strong{color:#20212e;font-size:27px;text-shadow:none}.systemic-metric-list em{font-size:10px}.systemic-findings>div{border-color:#ded9ee;border-radius:9px;background:rgba(255,255,255,.62)}.systemic-findings b{color:#343542;font-size:12px}.systemic-findings p{display:block;color:#595a6d;font-size:12px;line-height:1.75}.systemic-notice{color:#606173;font-size:11px;border-radius:8px;background:rgba(255,255,255,.55)}.systemic-placeholder p{color:#77788a;font-size:11px}
+
+/* 终端保留深色，但提高字号与紫色一致性 */
+.module-log{--log-accent:#9a70ff;--log-rgb:154,112,255;border-color:rgba(154,112,255,.38);border-radius:15px;background:#292a39;box-shadow:0 14px 36px rgba(42,35,75,.13),inset 0 0 34px rgba(154,112,255,.025)}
+.module-log>header{height:43px;background:linear-gradient(180deg,#3a3b4d,#323344);border-color:rgba(154,112,255,.25)}
+.terminal-identity b{color:#f3f1ff;font-size:11px}.terminal-identity em{color:#b8b2c9;font-size:10px}.terminal-live{font-size:9px}.module-log>header small,.module-log>header button{font-size:9px}.module-log>header button{background:#292a39;color:#bbb5ca}
+.module-log-stream{height:218px;padding:11px 14px 15px}.module-log-line{min-height:27px;grid-template-columns:67px 72px 11px max-content minmax(140px,1fr)}.module-log-line time{font-size:9px;color:#88849a}.terminal-channel{font-size:9px;color:#aaa4b9}.terminal-prompt{font-size:11px}.module-log-line>b{font-size:11px;color:#e0dce9}.module-log-line>small{font-size:10px;color:#aaa6b8}.terminal-cursor{height:24px;grid-template-columns:67px 72px 1fr;font-size:9px}
+
+@media(max-width:1450px){
+  .command-overview{gap:10px}.workbench,.amd-console,.systemic-grid{gap:9px}
+  .metric-list span,.systemic-metric-list span{font-size:12px}
+  .metric-list strong,.systemic-metric-list strong{font-size:24px}
+  .module-log-line{grid-template-columns:62px 67px 10px max-content minmax(110px,1fr)}
+}

@@ -11,6 +11,7 @@ import SystemicWorkspace from './SystemicWorkspace';
 import ModuleLog from './ModuleLog';
 import { useModuleLog } from './useModuleLog';
 import './overview.css';
+import './theme-refresh.css';
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000' : window.location.origin);
 const MAX_FILE_SIZE = 12 * 1024 * 1024;
