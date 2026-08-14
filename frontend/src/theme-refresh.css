@@ -122,3 +122,84 @@ main{padding-top:32px}
   .metric-list strong,.systemic-metric-list strong{font-size:24px}
   .module-log-line{grid-template-columns:62px 67px 10px max-content minmax(110px,1fr)}
 }
+
+/* 可读性校准：消除 7–9px 的关键界面文字。 */
+.brand small{font-size:12px;line-height:1.55;letter-spacing:1.4px}
+.workspace-switch button{font-size:14px}
+.header-meta small{font-size:11px}.header-meta b{font-size:13px;line-height:1.7}
+.eyebrow,.systemic-station-head>div>span{font-size:12px}
+
+.core-center small{font-size:10px}.core-center span{font-size:11px}
+.overview-heading span{font-size:16px}.overview-heading b{font-size:11px}
+.capability-number{font-size:10px}
+.capability-copy strong{font-size:15px;line-height:1.45}
+.capability-copy small{font-size:10px;line-height:1.7}
+.readiness-score span{font-size:12px}.overview-status li{font-size:12px}.overview-status>button span{font-size:13px}
+.station-heading>p{font-size:14px}
+
+.pipeline-nav strong{font-size:15px}.pipeline-no{font-size:10px}
+.panel-kicker,.stage-head>span{font-size:13px}
+.stage-head b,.stage-head small{font-size:10px}
+.engine-panel h2{font-size:27px}.task-summary{font-size:14px}.engine-type{font-size:12px}
+.modality-tags span{font-size:10px}
+.image-hud span{font-size:10px}.input-actions button,.systemic-actions button{font-size:13px}
+.processing strong,.waiting strong,.systemic-waiting b,.systemic-processing b{font-size:13px}
+.processing small,.waiting small,.systemic-waiting small,.systemic-processing small{font-size:10px}
+.result-label,.systemic-done{font-size:10px}
+.run-button span,.systemic-run{font-size:14px}
+.quality-gate{font-size:12px}.quality-gate p,.quality-gate small{font-size:11px}
+.result-data h3,.systemic-result-copy h3{font-size:19px}
+.metric-list span,.systemic-metric-list span{font-size:14px}
+.metric-list span small,.systemic-metric-list span small{font-size:11px;line-height:1.45}
+.metric-list strong,.systemic-metric-list strong{font-size:28px}
+.metric-list em,.systemic-metric-list em{font-size:11px}
+.probability-mini span,.probability-mini strong{font-size:11px}
+.result-notice,.systemic-notice{font-size:12px;line-height:1.7}
+.metric-placeholder p,.systemic-placeholder p{font-size:12px}
+
+.amd-hero>div:first-child>p{font-size:14px}
+.agent-service small{font-size:10px}.agent-service b{font-size:12px}
+.flow-step small{font-size:10px}.flow-step b{font-size:13px}
+.amd-panel-head{font-size:11px}.amd-panel-head>b{font-size:10px}
+.case-title{font-size:13px}.case-facts dt{font-size:11px}.case-facts dd{font-size:13px}
+.case-narrative{font-size:13px}.case-safety span{font-size:11px}
+.visit-title b{font-size:14px}.visit-title small{font-size:10px}.visit-image span{font-size:10px}
+.model-core small{font-size:11px}.agent-launch li{font-size:12px}.agent-run>span{font-size:13px}.agent-run small,.agent-launch>p{font-size:10px}
+.decision-banner>div:nth-child(2) small{font-size:10px}.decision-banner h2{font-size:21px}.decision-banner p{font-size:13px}
+.decision-score small{font-size:10px}.decision-score span{font-size:12px}
+.report-sections small,.structured-summary-grid small{font-size:12px}
+.report-sections p,.structured-summary-grid p{font-size:14px}
+.structured-summary-grid strong{font-size:18px}
+.safety-triggers span{font-size:11px}.safety-triggers p,.uncertainty{font-size:12px}
+.visit-segmentation>header strong{font-size:14px}.visit-segmentation>header small{font-size:11px}
+.segmentation-gallery figcaption{font-size:10px}
+.visit-quant-grid small,.longitudinal-deltas article small{font-size:10px}
+.visit-quant-grid strong,.longitudinal-deltas article strong{font-size:19px}
+.planning-rationale{font-size:14px}.procedure-status small,.procedure-overview small{font-size:11px}
+.procedure-status strong,.procedure-overview strong,.procedure-checklists h3{font-size:13px}
+.procedure-checklists li{font-size:12px}
+.biomarker-visits h3{font-size:13px}.biomarker-visits dt{font-size:10px}.biomarker-visits dd{font-size:13px}
+.option-row>span,.option-row em{font-size:11px}.option-row b{font-size:12px}
+.trace-row small{font-size:10px}.trace-row b{font-size:12px}.trace-row em{font-size:10px}
+.trace-card>p{font-size:11px}.evidence-card a b{font-size:12px}.evidence-card a small{font-size:10px}
+
+.systemic-index{font-size:10px}.systemic-title p{font-size:14px}
+.systemic-core>div small{font-size:10px}.systemic-steps span{font-size:10px}.systemic-steps b{font-size:14px}
+.systemic-validation span{font-size:11px}.systemic-validation b{font-size:17px}.systemic-validation small{font-size:10px}
+.systemic-station-head>p{font-size:12px}.systemic-panel-head>span{font-size:13px}.systemic-panel-head small{font-size:11px}
+.age-input{font-size:13px}.age-input em{font-size:11px}.view-switch button{font-size:11px}
+.systemic-quality span{font-size:12px}.systemic-quality small{font-size:11px}
+.systemic-findings b{font-size:13px}.systemic-findings p{font-size:13px}
+
+.terminal-identity b{font-size:12px}.terminal-identity em{font-size:11px}
+.terminal-live,.module-log>header small,.module-log>header button{font-size:10px}
+.module-log-line time,.terminal-channel,.terminal-cursor{font-size:10px}
+.module-log-line>b{font-size:12px}.module-log-line>small{font-size:11px}
+
+@media(max-width:1450px){
+  .capability-copy strong{font-size:14px}.capability-copy small{font-size:10px}
+  .pipeline-nav strong{font-size:14px}
+  .metric-list span,.systemic-metric-list span{font-size:13px}
+  .metric-list strong,.systemic-metric-list strong{font-size:26px}
+  .report-sections p,.structured-summary-grid p{font-size:13px}
+}
