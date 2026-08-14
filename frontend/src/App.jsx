@@ -155,7 +155,6 @@ function App() {
           <button className={workspace === 'cerebrovascular' ? 'active' : ''} onClick={() => setWorkspace('cerebrovascular')}>眼观脑血管</button>
         </nav>
         <div className="header-meta">
-          <span><small>支持影像</small><b>OCT · OCTA · 眼底彩照</b></span>
           <span><small>当前模块</small><b>{workspace === 'imaging' ? '影像分析' : workspace === 'amd' ? '纵向随访' : workspace === 'eye-age' ? '眼龄评估' : workspace === 'cardiovascular' ? '心血管表型' : '脑血管表型'}</b></span>
           <span className={`service ${service}`}><small>系统状态</small><b><i /> {service === 'online' ? '在线' : service === 'offline' ? '离线' : '检查中'}</b></span>
         </div>
@@ -197,7 +196,6 @@ function App() {
         <section className="analysis-station" ref={workbenchRef}>
           <div className="station-heading">
             <div><span className="eyebrow">分析工作台</span><h1>选择功能，上传影像，<em>获得可量化结果。</em></h1></div>
-            <p>可直接运行内置病例，也可以上传自己的影像。</p>
           </div>
 
           <nav className="pipeline-nav" aria-label="分析功能">
