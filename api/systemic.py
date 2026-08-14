@@ -179,7 +179,7 @@ def run_module(module_id: str, image_path: Path, chronological_age: float | None
         "runtime_ms": raw["runtime_ms"],
         "real_inference": True,
         "notice": (
-            "仅用于科研，眼龄不是生物学年龄。" if module_id == "eye-age"
+            "" if module_id == "eye-age"
             else "输出为视网膜微血管表型，不等同于心脑血管疾病诊断或患病概率。"
         ),
     }

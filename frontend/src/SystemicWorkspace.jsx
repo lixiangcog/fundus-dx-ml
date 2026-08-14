@@ -171,7 +171,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
             <h3>{result.summary}</h3>
             <div className="systemic-metric-list">{result.metrics.map((metric) => <div key={metric.label}><span>{metric.label}<small>{metric.detail}</small></span><strong>{metric.value}<em>{metric.unit}</em></strong></div>)}</div>
             <div className="systemic-findings">{result.sections.map((section) => <div key={section.title}><b>{section.title}</b><p>{section.text}</p></div>)}</div>
-            <p className="systemic-notice"><CircleAlert size={13}/>{result.notice}</p>
+            {result.notice && <p className="systemic-notice"><CircleAlert size={13}/>{result.notice}</p>}
           </motion.div> : <div className="systemic-placeholder"><div>{[38,64,48,82,58,92,46,72,54,86].map((height,index) => <i key={index} style={{height:`${height}%`}}/>)}</div><p>运行后显示分割、量化与结果解读。</p></div>}
         </aside>
       </div>

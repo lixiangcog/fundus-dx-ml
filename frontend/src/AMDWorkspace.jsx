@@ -540,7 +540,7 @@ function AgentResult({ result, onReset }) {
         </section>
 
         {result.reported_reference_biomarkers && <section className="biomarker-card reported-biomarkers">
-          <div className="amd-panel-head"><span><BookOpen size={14}/> 历史随访指标</span><b>与系统结果分列</b></div>
+          <div className="amd-panel-head"><span><BookOpen size={14}/> 历史随访指标</span></div>
           <div className="reported-grid">
             <article><small>最佳矫正视力</small><strong>{result.reported_reference_biomarkers.bcva_decimal[0]} → {result.reported_reference_biomarkers.bcva_decimal[1]}</strong></article>
             <article><small>OCT 病灶面积</small><strong>{result.reported_reference_biomarkers.oct.candidate_lesion_area_mm2[0]} → {result.reported_reference_biomarkers.oct.candidate_lesion_area_mm2[1]} mm²</strong></article>
