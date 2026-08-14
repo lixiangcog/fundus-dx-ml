@@ -162,6 +162,7 @@ main{padding-top:32px}
 .flow-step small{font-size:10px}.flow-step b{font-size:13px}
 .amd-panel-head{font-size:11px}.amd-panel-head>b{font-size:10px}
 .case-title{font-size:13px}.case-facts dt{font-size:11px}.case-facts dd{font-size:13px}
+.case-context>.case-facts{margin-top:22px}
 .case-narrative{font-size:13px}.case-safety span{font-size:11px}
 .visit-title b{font-size:14px}.visit-title small{font-size:10px}.visit-image span{font-size:10px}
 .model-core small{font-size:11px}.agent-launch li{font-size:12px}.agent-run>span{font-size:13px}.agent-run small,.agent-launch>p{font-size:10px}

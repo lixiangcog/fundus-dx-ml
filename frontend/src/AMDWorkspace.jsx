@@ -73,8 +73,8 @@ function AMDWorkspace({ apiUrl }) {
     fetch(`${apiUrl}/amd-agent/config`).then(r => r.json()).then((data) => {
       setConfig(data); setService(data.service);
       writeAmdLogs([
-        { level:'command', channel:'SHELL', message:'fundus-dx amd status --case CASE_001' },
-        { level:'success', channel:'INPUT', message:'case=CASE_001; visits=2; images=6', detail:'modalities=OCT,OCTA,FUNDUS' },
+        { level:'command', channel:'SHELL', message:'fundus-dx amd status --case default' },
+        { level:'success', channel:'INPUT', message:'visits=2; images=6', detail:'modalities=OCT,OCTA,FUNDUS' },
         { level:data.service?.status === 'ready' ? 'success' : 'warning', channel:'SERVICE', message:`agent=${data.service?.status || 'unknown'}`, detail:'multimodal tools + evidence retrieval' },
       ]);
     }).catch(() => { setError('AMD 随访功能暂时不可用。'); writeAmdLog('error', 'GET /amd-agent/config -> failed', '请检查网页服务与分析服务', 'HTTP'); });
@@ -100,7 +100,7 @@ function AMDWorkspace({ apiUrl }) {
     if (loading || service.status !== 'ready') return;
     setLoading(true); setResult(null); setError('');
     writeAmdLogs([
-      { level:'command', channel:'SHELL', message:'fundus-dx amd run --case CASE_001 --device cuda:0' },
+      { level:'command', channel:'SHELL', message:'fundus-dx amd run --case default --device cuda:0' },
       { level:'info', channel:'INPUT', message:'validating six de-identified images', detail:'baseline=3; followup=3' },
       { level:'run', channel:'QUEUE', message:'multimodal job accepted', detail:'quantification -> comparison -> retrieval -> report' },
       { level:'run', channel:'CUDA', message:'GPU tools dispatched', detail:'real_inference=true; fallback=false' },
@@ -159,10 +159,8 @@ function AMDWorkspace({ apiUrl }) {
 
     {!result ? <section className="amd-console">
       <aside className="case-context">
-        <div className="amd-panel-head"><span><Stethoscope size={14}/> 病例信息</span><b>内置示例病例</b></div>
+        <div className="amd-panel-head"><span><Stethoscope size={14}/> 病例信息</span></div>
         {caseData ? <>
-          <h2>{caseData.case_id}</h2>
-          <p className="case-title">{caseData.title}</p>
           <dl className="case-facts">
             <div><dt>患者</dt><dd>{caseData.patient.age} 岁 / {caseData.patient.sex} / {caseData.patient.eye}</dd></div>
             <div><dt>诊断</dt><dd>{caseData.patient.diagnosis}</dd></div>
@@ -171,11 +169,10 @@ function AMDWorkspace({ apiUrl }) {
           </dl>
           <p className="case-narrative">{caseData.context}</p>
         </> : <div className="case-loading"><LoaderCircle size={20}/>正在加载病例</div>}
-        <div className="case-safety"><ShieldAlert size={15}/><span><b>影像需复核</b>当前示例影像分辨率有限；历史记录与系统分析结果分开显示。</span></div>
       </aside>
 
       <section className="visit-matrix">
-        <div className="amd-panel-head"><span><ImageIcon size={14}/> 多模态随访影像</span><b>2 次就诊 · 6 张影像</b></div>
+        <div className="amd-panel-head"><span><ImageIcon size={14}/> 多模态随访影像</span></div>
         <div className="visit-grid">
           {(caseData?.visits || []).map((visit,index) => <div className="visit-column" key={visit.id}>
             <div className="visit-title"><span>{visit.id}</span><div><b>{visit.label}</b><small>{visit.date} / 视力 {visit.bcva_decimal}</small></div></div>
@@ -189,7 +186,7 @@ function AMDWorkspace({ apiUrl }) {
       </section>
 
       <aside className="agent-launch">
-        <div className="amd-panel-head"><span><BrainCircuit size={14}/> 分析流程</span><b>真实推理</b></div>
+        <div className="amd-panel-head"><span><BrainCircuit size={14}/> 分析流程</span></div>
         <div className="model-core"><span><BrainCircuit size={30}/><i/><em/></span><b>多模态分析</b><small>纵向影像与病历信息综合</small></div>
         <ul>
           <li><Check size={12}/>对比两次就诊的六张影像</li>
@@ -246,7 +243,7 @@ function AgentResult({ result, onReset }) {
         </section>
 
         <section className="segmentation-card">
-          <div className="amd-panel-head"><span><ScanLine size={14}/> 分割、病灶定位与定量结果</span><b>真实推理</b></div>
+          <div className="amd-panel-head"><span><ScanLine size={14}/> 分割、病灶定位与定量结果</span></div>
           <div className="segmentation-visits">
             {Object.entries(visitTools).map(([visit,data]) => {
               const tiles = [
@@ -334,7 +331,7 @@ function AgentResult({ result, onReset }) {
           {result.tool_trace.map((item,index) => <div className="trace-row" key={item.tool}>
             <span><Check size={11}/></span><div><small>步骤 {String(index+1).padStart(2,'0')}</small><b>{STEPS[index]?.label || '完成'}</b><em>{item.runtime_ms ? `${(item.runtime_ms/1000).toFixed(1)} 秒` : '已完成'}</em></div>
           </div>)}
-          <p><Check size={13}/>真实推理已完成</p>
+          <p><Check size={13}/>分析已完成</p>
         </section>
         <section className="evidence-card">
           <div className="amd-panel-head"><span><BookOpen size={14}/> 决策依据</span><b>{result.evidence.length} 条</b></div>

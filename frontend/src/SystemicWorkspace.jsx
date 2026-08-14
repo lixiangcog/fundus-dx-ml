@@ -122,7 +122,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
         {STEPS[moduleId].map((step,index) => <div key={step}><span>0{index+1}</span><i/><b>{step}</b><Check size={13}/></div>)}
       </div>
       <div className="systemic-validation">
-        <span><ShieldCheck size={14}/>质量校验</span><b>{config.published_validation}</b><small>公开权重 · 真实推理</small>
+        <span><ShieldCheck size={14}/>质量校验</span><b>{config.published_validation}</b><small>公开权重</small>
       </div>
     </section>
 
@@ -154,7 +154,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
           <div className={`systemic-image-frame ${result ? 'complete' : ''}`}>
             <span className="corner tl"/><span className="corner tr"/><span className="corner bl"/><span className="corner br"/>
             <AnimatePresence mode="wait">
-              {loading ? <motion.div key="loading" className="systemic-processing" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}><LoaderCircle size={32}/><b>正在运行真实推理</b><small>{moduleId === 'eye-age' ? '正在估算眼龄' : '正在分割并计算血管表型'}</small><i/></motion.div>
+              {loading ? <motion.div key="loading" className="systemic-processing" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}><LoaderCircle size={32}/><b>正在分析</b><small>{moduleId === 'eye-age' ? '正在估算眼龄' : '正在分割并计算血管表型'}</small><i/></motion.div>
                 : result ? <motion.img key={shownImage} src={shownImage} alt="分析结果" initial={{opacity:0,scale:.985}} animate={{opacity:1,scale:1}}/>
                 : <motion.div key="waiting" className="systemic-waiting" initial={{opacity:0}} animate={{opacity:1}}><Icon size={30}/><b>等待分析</b><small>内置样例已就绪</small></motion.div>}
             </AnimatePresence>

@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   Activity, BrainCircuit, Check, CircleAlert, CircleDot,
   FileImage, ImagePlus, Layers3, LoaderCircle, Microscope,
-  Network, Play, RotateCcw, ScanLine, ShieldAlert, Sparkles, UploadCloud,
+  Network, Play, RotateCcw, ScanLine, Sparkles, UploadCloud,
 } from 'lucide-react';
 import AMDWorkspace from './AMDWorkspace';
 import SystemicWorkspace from './SystemicWorkspace';
@@ -272,7 +272,6 @@ function App() {
         <ModuleLog title={active.title} entries={imagingLogs} onClear={clearImagingLog} running={loading}/>
         {error && <div className="error-banner"><CircleAlert size={16} />{error}</div>}
         </>}
-        <footer><p><ShieldAlert size={14} />仅用于科研，结果不构成临床诊断或治疗建议。</p></footer>
       </main>
     </div>
   );
