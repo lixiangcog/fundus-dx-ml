@@ -7,6 +7,7 @@ import {
   Network, Play, RotateCcw, ScanLine, ShieldAlert, Sparkles, UploadCloud,
 } from 'lucide-react';
 import AMDWorkspace from './AMDWorkspace';
+import './overview.css';
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000' : window.location.origin);
 const MAX_FILE_SIZE = 12 * 1024 * 1024;
@@ -43,6 +44,7 @@ function App() {
   const [dragging, setDragging] = useState(false);
   const [isDefault, setIsDefault] = useState(true);
   const fileInput = useRef(null);
+  const workbenchRef = useRef(null);
   const active = capabilities.find((item) => item.id === activeId) || capabilities[0];
 
   useEffect(() => {
@@ -71,6 +73,11 @@ function App() {
   useEffect(() => () => { if (preview?.startsWith('blob:')) URL.revokeObjectURL(preview); }, [preview]);
 
   const chooseCapability = (id) => { if (loading || id === activeId) return; setActiveId(id); };
+  const enterCapability = (id) => {
+    if (loading) return;
+    if (id !== activeId) setActiveId(id);
+    window.requestAnimationFrame(() => workbenchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
   const processFile = (nextFile) => {
     if (!nextFile?.type?.startsWith('image/')) { setError('请选择 JPG、PNG 或 WebP 影像。'); return; }
     if (nextFile.size > MAX_FILE_SIZE) { setError('影像不能超过 12 MB。'); return; }
@@ -108,21 +115,64 @@ function App() {
 
       <main>
         {workspace === 'amd' ? <AMDWorkspace apiUrl={API_URL}/> : <>
-        <section className="intro-row">
-          <div><span className="eyebrow">多模态眼科影像分析</span><h1>上传影像，<em>获得可量化结果。</em></h1></div>
-          <p>选择功能后可直接运行默认病例，也可以上传自己的影像。</p>
+        <section className="command-overview">
+          <div className="overview-lines" aria-hidden="true"><i /><i /><i /><span /><span /></div>
+          <div className="analysis-core">
+            <div className="core-ring ring-one" aria-hidden="true"><i /><i /><i /></div>
+            <div className="core-ring ring-two" aria-hidden="true" />
+            <div className="core-center">
+              <small>OCT · OCTA · 眼底彩照</small>
+              <strong>影像分析核心</strong>
+              <span>增强 · 分割 · 识别 · 定量</span>
+            </div>
+            <div className="core-scan" aria-hidden="true" />
+          </div>
+
+          <div className="capability-map">
+            <div className="overview-heading"><span>分析功能</span><b>选择节点进入工作台</b></div>
+            <div className="capability-spine" aria-hidden="true" />
+            <div className="capability-grid">
+              {capabilities.map((item) => {
+                const Icon = ICONS[item.id] || Activity; const selected = item.id === activeId;
+                return <button key={item.id} className={selected ? 'active' : ''} onClick={() => enterCapability(item.id)}>
+                  <span className="capability-number">{item.number}</span>
+                  <span className="capability-symbol"><Icon size={18} /></span>
+                  <span className="capability-copy"><strong>{item.title}</strong><small>{item.default_modality}</small></span>
+                  <i className="state-dot" />
+                </button>;
+              })}
+            </div>
+          </div>
+
+          <aside className="overview-status">
+            <div className="overview-heading"><span>平台状态</span><b>实时就绪</b></div>
+            <div className="readiness-score"><strong>6<em>/6</em></strong><span>分析功能<br />均可直接运行</span></div>
+            <div className="readiness-bars" aria-hidden="true">{[82,94,76,88,100,90,72,96,84,92,78,100].map((width, index) => <i key={index}><b style={{ width: `${width}%` }} /></i>)}</div>
+            <ul>
+              <li><Check size={13} /><span>覆盖三类眼科影像</span></li>
+              <li><Check size={13} /><span>内置可运行默认病例</span></li>
+              <li><Check size={13} /><span>同步输出图像与定量结果</span></li>
+            </ul>
+            <button onClick={() => workbenchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><Play size={14} fill="currentColor" /><span>进入分析工作台</span></button>
+          </aside>
         </section>
 
-        <nav className="pipeline-nav" aria-label="分析功能">
-          {capabilities.map((item) => {
-            const Icon = ICONS[item.id] || Activity; const selected = item.id === activeId;
-            return <button key={item.id} className={selected ? 'active' : ''} onClick={() => chooseCapability(item.id)}>
-              <span className="pipeline-no">{item.number}</span><span className="pipeline-icon"><Icon size={18} /></span><span><strong>{item.title}</strong></span><i className="state-dot" />
-            </button>;
-          })}
-        </nav>
+        <section className="analysis-station" ref={workbenchRef}>
+          <div className="station-heading">
+            <div><span className="eyebrow">分析工作台</span><h1>选择功能，上传影像，<em>获得可量化结果。</em></h1></div>
+            <p>可直接运行内置病例，也可以上传自己的影像。</p>
+          </div>
 
-        <section className="workbench">
+          <nav className="pipeline-nav" aria-label="分析功能">
+            {capabilities.map((item) => {
+              const Icon = ICONS[item.id] || Activity; const selected = item.id === activeId;
+              return <button key={item.id} className={selected ? 'active' : ''} onClick={() => chooseCapability(item.id)}>
+                <span className="pipeline-no">{item.number}</span><span className="pipeline-icon"><Icon size={18} /></span><span><strong>{item.title}</strong></span><i className="state-dot" />
+              </button>;
+            })}
+          </nav>
+
+          <section className="workbench">
           <aside className="engine-panel">
             <div className="panel-kicker"><CircleDot size={13} /> 当前功能</div>
             <h2>{active.number}<span>/</span>{active.title}</h2>
@@ -168,6 +218,7 @@ function App() {
               <p className="result-notice"><CircleAlert size={14} />{result.notice}</p>
             </motion.div> : <div className="metric-placeholder"><div className="signal-bars">{[24,48,34,70,52,86,42,64,30,74].map((h,i)=><i key={i} style={{height:`${h}%`}} />)}</div><p>运行后在这里查看定量结果。</p></div>}
           </aside>
+          </section>
         </section>
 
         {error && <div className="error-banner"><CircleAlert size={16} />{error}</div>}
