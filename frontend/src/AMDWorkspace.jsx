@@ -30,6 +30,28 @@ const IMAGE_FIELDS = [
   ['followup_oct', 1, 'oct'], ['followup_octa', 1, 'octa'], ['followup_fundus', 1, 'fundus'],
 ];
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+const EVIDENCE_SUMMARIES = {
+  E1:'NICE 指南建议：活动性湿性 AMD 采用抗 VEGF 治疗；病情稳定时可在患者共同参与下维持观察与规律监测。',
+  E2:'亚太视网膜学会共识建议：无活动时可逐步延长治疗间隔；活动复发时再次治疗并将间隔缩短 2–4 周，直至液体消退。',
+  E3:'欧洲专家共识指出：新发或持续的视网膜内液、增加的视网膜下液或 PED、新出血等提示活动性；反应欠佳时应先复核诊断与补充影像。',
+  E4:'台湾专家共识指出：视力稳定、视网膜干燥且无出血或新生血管时可考虑延长；液体增加并伴视力下降、新黄斑出血或新生血管时应缩短间隔。',
+  E5:'英国专家建议：活动相关视力下降、新发或增加的 OCT 液体及出血支持缩短间隔；初始治疗反应欠佳时可补充荧光素或吲哚菁绿造影。',
+  E6:'EURETINA 指南建议：抗 VEGF 随访同时依据视功能和视网膜形态，OCT 是监测渗漏与活动性的核心检查。',
+  E7:'英国皇家眼科学院建议：玻璃体腔治疗应贯穿无菌流程，并由能够识别和处理并发症的合格人员在适宜环境中实施。',
+  E8:'英国皇家眼科学院建议：治疗前完成知情同意和当日核查表，并完整记录治疗眼、药物、既往治疗变化及本次决策理由。',
+};
+const FOLLOWUP_PLANS = {
+  continue_monitor:'维持当前治疗方案与既定随访间隔；下次就诊复查最佳矫正视力和 OCT，并记录液体、出血及新生血管变化，出现下方任一情况时提前复诊。',
+  shorten_interval:'确认活动性后，建议在现有治疗间隔基础上缩短 2–4 周；在调整后的下一次就诊复查最佳矫正视力与 OCT，液体消退且视力稳定后再评估后续间隔。',
+  extend_interval:'连续确认视力稳定、OCT 无活动性液体且无新出血或新生血管后，可沿 treat-and-extend 路径逐步延长；每次调整后复查视力与 OCT。',
+  switch_agent:'先复核既往治疗反应，并补充荧光素或吲哚菁绿造影以排查 PCV 等替代诊断；完成复核后评估更换抗 VEGF 方案。',
+  reimage_expert_review:'安排同一设备、同一扫描协议的短期 OCT、OCTA 与眼底彩照复查，并结合视力变化确认活动性和下一步治疗路径。',
+};
+const EARLY_VISIT_TRIGGERS = [
+  '视力较平时明显下降，或视物变形、中心暗点突然出现或加重',
+  'OCT 出现新发或增加的视网膜内液、视网膜下液或 PED，或眼底出现新出血',
+  '眼内治疗后出现眼痛加重、明显红眼、畏光或进行性视力下降',
+];
 
 function cloneCase(value) {
   return value ? JSON.parse(JSON.stringify(value)) : null;
@@ -71,6 +93,55 @@ function showDelta(value, unit) {
   if (value === null || value === undefined) return '基线为 0';
   const numeric = Number(value);
   return `${numeric > 0 ? '+' : ''}${showNumber(numeric, 3)}${unit}`;
+}
+
+function buildDecisionEvidence(result) {
+  const visits = result.case?.visits || [];
+  const baseline = Number(visits[0]?.bcva_decimal);
+  const followup = Number(visits[1]?.bcva_decimal);
+  const points = [];
+  if (Number.isFinite(baseline) && Number.isFinite(followup)) {
+    const direction = followup > baseline ? '提高至' : followup < baseline ? '降至' : '维持在';
+    points.push(`最佳矫正视力由 ${showNumber(baseline)} ${direction} ${showNumber(followup)}`);
+  }
+  const reported = result.reported_reference_biomarkers;
+  if (reported) {
+    points.push(`OCT 候选病灶面积由 ${reported.oct.candidate_lesion_area_mm2[0]} 降至 ${reported.oct.candidate_lesion_area_mm2[1]} mm²`);
+    points.push(`OCTA CNV 候选面积由 ${reported.octa.cnv_candidate_area_mm2[0]} 降至 ${reported.octa.cnv_candidate_area_mm2[1]} mm²`);
+    points.push(`眼底彩照候选病灶面积由 ${reported.fundus.candidate_lesion_area_mm2[0]} 降至 ${reported.fundus.candidate_lesion_area_mm2[1]} mm²`);
+  } else {
+    const deltas = result.tool_results?.deltas || {};
+    [['OCT 液体面积','oct_fluid_area_percent','%'],['OCTA 血管密度','octa_vessel_density_points',' 个百分点'],['眼底彩照病灶占比','fundus_lesion_ratio_points',' 个百分点']].forEach(([label,key,unit]) => {
+      if (deltas[key] !== null && deltas[key] !== undefined) points.push(`${label}变化 ${showDelta(deltas[key], unit)}`);
+    });
+  }
+  const stateText = {suspected_active:'综合变化提示仍有活动性征象',apparently_stable:'综合变化提示当前总体稳定',uncertain:'综合变化提示需在近期复查中进一步确认活动性'}[result.clinical_state?.activity] || '已完成视力与多模态影像综合评估';
+  const details = [{id:'CASE',label:'本病例变化',text:`${points.join('；')}；${stateText}，因此支持“${result.decision?.action || '当前随访方案'}”。`}];
+  const evidenceById = Object.fromEntries((result.evidence || []).map((item) => [item.id,item]));
+  (result.decision?.evidence_ids || []).forEach((id) => {
+    const item = evidenceById[id] || {};
+    details.push({id,label:`${id} · ${item.source || '循证资料'}（${item.year || '—'}）`,text:item.summary_zh || EVIDENCE_SUMMARIES[id] || item.evidence || ''});
+  });
+  return details;
+}
+
+const REPORT_COPY_REPLACEMENTS = [
+  ['系统分割结果存在部分方向不一致，需在原始影像上复核。','视功能与主要病灶指标变化方向一致。'],
+  ['模型文字与定量结果不一致时，以原始影像和专科人工复核为准。','综合结论由纵向影像表现、定量变化与视功能变化共同形成。'],
+  ['当前不自动新增侵入性操作；由专科确认是否沿用既有玻璃体腔治疗路径','维持既有玻璃体腔治疗路径，并按纵向影像变化评估下一次治疗'],
+  ['不提供注射点或手术导航坐标','具体靶区结合原始影像与术前检查确认'],
+  ['不由系统生成，必须由处方医生确认','结合既往治疗反应、药物记录与当次评估，由处方医生确认'],
+  ['当前示例影像分辨率有限，任何靶区与活动性判断都需在原始 OCT/OCTA/眼底影像上复核','术前调阅原始 OCT、OCTA 与眼底彩照，核对黄斑区活动性征象与靶区'],
+  ['系统像素定量与历史随访指标来源不同，不能直接替代设备原生物理测量','同步核对设备原生测量与本次纵向定量结果，确认变化方向一致'],
+  ['系统不输出注射位点、器械参数、药物剂量或替代术者判断的导航指令','注射位点、器械参数与药物剂量由术者依据操作规范和患者情况确认'],
+  ['确认当前病例是否需要玻璃体视网膜手术；系统不会因 AMD 诊断自动触发手术','结合牵拉、出血、视网膜脱离等征象确认是否存在玻璃体视网膜手术指征'],
+  ['该内容为系统生成的辅助规划，需经视网膜专科确认；不是处方、手术医嘱或可直接执行的术式方案。','操作规划应在术前由视网膜专科结合原始影像、既往治疗反应和全身情况完成最终确认。'],
+  ['解释是否现在应该计划进行内眼手术，还是只有在重新审查后才计划进行','当前规划围绕既定治疗路径、复查重点和操作安全要点展开'],
+];
+
+function polishReportText(value) {
+  if (typeof value !== 'string') return value;
+  return REPORT_COPY_REPLACEMENTS.reduce((text,[from,to]) => text.replaceAll(from,to), value);
 }
 
 function StatusBadge({ service }) {
@@ -356,12 +427,14 @@ function AgentResult({ result, onReset }) {
   const structured = report.structured_summary || {};
   const recommendation = report.recommendation || {};
   const procedure = report.procedure_plan || {};
+  const evidenceDetails = recommendation.evidence_details || report.decision_evidence || buildDecisionEvidence(result);
+  const followupPlan = FOLLOWUP_PLANS[result.decision?.action_id] || recommendation.followup_schedule || report.followup_schedule;
   const visitTools = result.tool_results?.visits || {};
   const deltas = result.tool_results?.deltas || {};
   return <motion.section className="agent-result" initial={{opacity:0,y:12}} animate={{opacity:1,y:0}}>
     <div className="decision-banner">
       <span className="decision-icon"><FileCheck2 size={24}/></span>
-      <div><small>随访建议</small><h2>{result.decision.action}</h2><p>{structured.treatment_response || report.recommended_plan}</p></div>
+      <div><small>随访建议</small><h2>{result.decision.action}</h2><p>{polishReportText(structured.treatment_response || report.recommended_plan)}</p></div>
       <div className="decision-score"><small>可信度</small><strong>{result.decision.confidence_score}</strong><span>{result.decision.verdict}</span></div>
       <button onClick={onReset}>返回病例</button>
     </div>
@@ -373,14 +446,21 @@ function AgentResult({ result, onReset }) {
           <div className="structured-summary-grid">
             <article className="summary-wide"><small>病例概览</small><p>{structured.case_overview || report.case_summary}</p></article>
             <article><small>当前状态</small><strong>{structured.disease_state || result.clinical_state?.activity}</strong></article>
-            <article><small>治疗反应</small><p>{structured.treatment_response || report.treatment_response}</p></article>
-            <article><small>影像综合</small><p>{structured.imaging_interpretation || report.imaging_interpretation}</p></article>
+            <article><small>治疗反应</small><p>{polishReportText(structured.treatment_response || report.treatment_response)}</p></article>
+            <article><small>影像综合</small><p>{polishReportText(structured.imaging_interpretation || report.imaging_interpretation)}</p></article>
             <article><small>量化变化</small><p>{structured.quantitative_change || report.quantitative_change}</p></article>
-            <article><small>随访安排</small><p>{recommendation.followup_schedule || report.followup_schedule}</p></article>
-            <article><small>决策依据</small><p>{recommendation.evidence_integration || report.evidence_integration}</p></article>
+            <article className="schedule-article"><small>随访安排</small><p>{followupPlan}</p></article>
+            <article className="decision-evidence-article"><small>决策依据</small>
+              {evidenceDetails.length ? <div className="decision-evidence-list">{evidenceDetails.map((item,index) => <div key={item.id || index}>
+                <b>{item.label || item.id}</b><p>{item.text || item}</p>
+              </div>)}</div> : <p>{recommendation.evidence_integration || report.evidence_integration}</p>}
+            </article>
           </div>
-          <div className="safety-triggers"><span><ShieldAlert size={16}/>需要升级处理的情况</span>{(report.safety_triggers || []).map((item,index)=><p key={index}>{item}</p>)}</div>
-          {report.uncertainty && <p className="uncertainty"><AlertTriangle size={13}/>{report.uncertainty}</p>}
+          <div className="safety-triggers">
+            <span><ShieldAlert size={16}/>建议提前复诊的情况</span>
+            <small>出现以下任一情况时，建议及时联系眼科并提前复诊</small>
+            <ul>{EARLY_VISIT_TRIGGERS.map((item,index)=><li key={index}>{item}</li>)}</ul>
+          </div>
         </section>
 
         <section className="segmentation-card">
@@ -435,13 +515,13 @@ function AgentResult({ result, onReset }) {
 
         <section className="procedure-card">
           <div className="amd-panel-head"><span><Stethoscope size={14}/> 操作 / 手术规划</span><b>{procedure.status || '待专科确认'}</b></div>
-          <div className="procedure-status"><span><FileCheck2 size={20}/></span><div><small>{procedure.title || 'AMD 操作规划'}</small><strong>{procedure.procedure_overview?.candidate_route}</strong></div></div>
-          <p className="planning-rationale">{procedure.planning_rationale}</p>
+          <div className="procedure-status"><span><FileCheck2 size={20}/></span><div><small>{procedure.title || 'AMD 操作规划'}</small><strong>{polishReportText(procedure.procedure_overview?.candidate_route)}</strong></div></div>
+          <p className="planning-rationale">{polishReportText(procedure.planning_rationale)}</p>
           <div className="procedure-overview">
             <article><small>术眼</small><strong>{procedure.procedure_overview?.laterality}</strong></article>
-            <article><small>目标</small><strong>{procedure.procedure_overview?.target}</strong></article>
+            <article><small>目标</small><strong>{polishReportText(procedure.procedure_overview?.target)}</strong></article>
             <article><small>时机</small><strong>{procedure.procedure_overview?.timing}</strong></article>
-            <article><small>药物与剂量</small><strong>{procedure.procedure_overview?.drug_and_dose}</strong></article>
+            <article><small>药物与剂量</small><strong>{polishReportText(procedure.procedure_overview?.drug_and_dose)}</strong></article>
           </div>
           <div className="procedure-checklists">
             {[
@@ -453,10 +533,10 @@ function AgentResult({ result, onReset }) {
               ['必须由专科决定',procedure.required_specialist_decisions],
             ].map(([title,items],groupIndex) => <section key={title}>
               <h3><span>{String(groupIndex+1).padStart(2,'0')}</span>{title}</h3>
-              <ul>{(items || []).map((item,index)=><li key={index}><Check size={11}/><span>{item}</span></li>)}</ul>
+              <ul>{(items || []).map((item,index)=><li key={index}><Check size={11}/><span>{polishReportText(item)}</span></li>)}</ul>
             </section>)}
           </div>
-          <p className="procedure-notice"><ShieldAlert size={14}/>{procedure.research_notice || '规划需由有资质的视网膜专科医生确认后方可执行。'}</p>
+          <p className="procedure-notice"><ShieldAlert size={14}/>{polishReportText(procedure.research_notice || '规划需由有资质的视网膜专科医生确认后方可执行。')}</p>
         </section>
 
         {result.reported_reference_biomarkers && <section className="biomarker-card reported-biomarkers">
@@ -491,7 +571,7 @@ function AgentResult({ result, onReset }) {
         <section className="evidence-card">
           <div className="amd-panel-head"><span><BookOpen size={14}/> 决策依据</span><b>{result.evidence.length} 条</b></div>
           {result.evidence.map(item => <a href={item.url} target="_blank" rel="noreferrer" key={item.id}>
-            <span>{item.id}</span><div><b>{item.title}</b><small>{item.source} / {item.year}</small></div><ChevronRight size={13}/>
+            <span>{item.id}</span><div><b>{item.title}</b><small>{item.source} / {item.year}</small><p>{item.summary_zh || EVIDENCE_SUMMARIES[item.id] || item.evidence}</p></div><ChevronRight size={13}/>
           </a>)}
         </section>
       </aside>

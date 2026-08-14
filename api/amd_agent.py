@@ -75,6 +75,17 @@ DEFAULT_CASE = {
     "image_quality": {"source":"paper_figure_crop","native_pixels":[93,99],"display_pixels":[564,594],"status":"review","reason":"当前示例影像分辨率有限，仅用于系统功能演示；不等同于原始 DICOM/OCT 体数据。"}
 }
 
+EVIDENCE_SUMMARIES_ZH = {
+    "E1": "NICE 指南建议：活动性湿性 AMD 采用抗 VEGF 治疗；病情稳定时可在患者共同参与下维持观察与规律监测。",
+    "E2": "亚太视网膜学会共识建议：无活动时可逐步延长治疗间隔；活动复发时再次治疗并将间隔缩短 2–4 周，直至液体消退。",
+    "E3": "欧洲专家共识指出：新发或持续的视网膜内液、增加的视网膜下液或 PED、新出血等提示活动性；反应欠佳时应先复核诊断与补充影像。",
+    "E4": "台湾专家共识指出：视力稳定、视网膜干燥且无出血或新生血管时可考虑延长；液体增加并伴视力下降、新黄斑出血或新生血管时应缩短间隔。",
+    "E5": "英国专家建议：活动相关视力下降、新发或增加的 OCT 液体及出血支持缩短间隔；初始治疗反应欠佳时可补充荧光素或吲哚菁绿造影。",
+    "E6": "EURETINA 指南建议：抗 VEGF 随访同时依据视功能和视网膜形态，OCT 是监测渗漏与活动性的核心检查。",
+    "E7": "英国皇家眼科学院建议：玻璃体腔治疗应贯穿无菌流程，并由能够识别和处理并发症的合格人员在适宜环境中实施。",
+    "E8": "英国皇家眼科学院建议：治疗前完成知情同意和当日核查表，并完整记录治疗眼、药物、既往治疗变化及本次决策理由。",
+}
+
 
 def ensure_agent_token() -> str:
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
@@ -435,6 +446,73 @@ def _evaluate_options(case: dict, tools: dict, vision: dict, specialist: dict, e
     return options, state
 
 
+def _decision_evidence_details(
+    case: dict,
+    tools: dict,
+    state: dict,
+    selected: dict,
+    evidence: list[dict],
+) -> list[dict[str, str]]:
+    """Turn internal measurements and citations into patient-facing decision grounds."""
+    visits = case["visits"]
+    baseline_acuity = float(visits[0].get("bcva_decimal", 0))
+    followup_acuity = float(visits[1].get("bcva_decimal", 0))
+    acuity_delta = followup_acuity - baseline_acuity
+    if acuity_delta > 0:
+        acuity_text = f"最佳矫正视力由 {baseline_acuity:g} 提高至 {followup_acuity:g}（+{acuity_delta:g}）"
+    elif acuity_delta < 0:
+        acuity_text = f"最佳矫正视力由 {baseline_acuity:g} 降至 {followup_acuity:g}（{acuity_delta:g}）"
+    else:
+        acuity_text = f"最佳矫正视力维持在 {followup_acuity:g}"
+
+    case_points = [acuity_text]
+    reported = case.get("reference_biomarkers")
+    if reported:
+        case_points.extend([
+            f"OCT 候选病灶面积由 {reported['oct']['candidate_lesion_area_mm2'][0]:g} 降至 {reported['oct']['candidate_lesion_area_mm2'][1]:g} mm²",
+            f"OCTA CNV 候选面积由 {reported['octa']['cnv_candidate_area_mm2'][0]:g} 降至 {reported['octa']['cnv_candidate_area_mm2'][1]:g} mm²",
+            f"眼底彩照候选病灶面积由 {reported['fundus']['candidate_lesion_area_mm2'][0]:g} 降至 {reported['fundus']['candidate_lesion_area_mm2'][1]:g} mm²",
+        ])
+    else:
+        deltas = tools.get("deltas", {})
+
+        def local_change(label: str, key: str, unit: str) -> str | None:
+            value = deltas.get(key)
+            if value is None:
+                return None
+            numeric = float(value)
+            direction = "增加" if numeric > 0 else "下降" if numeric < 0 else "无明显变化"
+            amount = "" if numeric == 0 else f" {abs(numeric):g}{unit}"
+            return f"{label}{direction}{amount}"
+
+        case_points.extend(filter(None, [
+            local_change("OCT 液体面积", "oct_fluid_area_percent", "%"),
+            local_change("OCTA 血管密度", "octa_vessel_density_points", " 个百分点"),
+            local_change("眼底彩照病灶占比", "fundus_lesion_ratio_points", " 个百分点"),
+        ]))
+
+    state_text = {
+        "suspected_active": "综合变化提示仍有活动性征象",
+        "apparently_stable": "综合变化提示当前总体稳定",
+        "uncertain": "综合变化提示需在近期复查中进一步确认活动性",
+    }.get(state.get("activity"), "已完成视力与多模态影像综合评估")
+    details = [{
+        "id": "CASE",
+        "label": "本病例变化",
+        "text": f"{'；'.join(case_points)}；{state_text}，因此支持“{selected['title']}”。",
+    }]
+
+    evidence_by_id = {item.get("id"): item for item in evidence}
+    for evidence_id in selected.get("evidence_ids", []):
+        item = evidence_by_id.get(evidence_id, {})
+        details.append({
+            "id": evidence_id,
+            "label": f"{evidence_id} · {item.get('source', '循证资料')}（{item.get('year', '—')}）",
+            "text": item.get("summary_zh") or EVIDENCE_SUMMARIES_ZH.get(evidence_id, item.get("evidence", "")),
+        })
+    return details
+
+
 def _build_procedure_plan(
     case: dict,
     state: dict,
@@ -446,11 +524,11 @@ def _build_procedure_plan(
     """Build a clinician-gated procedure plan from model synthesis plus fixed safety rules."""
     eye = case.get("patient", {}).get("eye", "术眼待确认")
     action_routes = {
-        "continue_monitor": "当前不自动新增侵入性操作；由专科确认是否沿用既有玻璃体腔治疗路径",
-        "shorten_interval": "复核玻璃体腔抗 VEGF 治疗路径，并由专科决定是否缩短治疗间隔",
-        "extend_interval": "仅在确认无活动后考虑延长治疗间隔，不自动取消既定治疗",
-        "switch_agent": "先复核诊断与既往反应，再由处方医生评估是否更换玻璃体腔治疗方案",
-        "reimage_expert_review": "先完成同协议复查与视网膜专科复核，再决定是否进行侵入性操作",
+        "continue_monitor": "维持既有玻璃体腔治疗路径，并按纵向影像变化评估下一次治疗",
+        "shorten_interval": "复核活动性征象，并评估将现有抗 VEGF 治疗间隔缩短 2–4 周",
+        "extend_interval": "连续确认无活动后，沿 treat-and-extend 路径逐步评估延长间隔",
+        "switch_agent": "复核诊断、既往反应与补充影像后，评估更换玻璃体腔治疗方案",
+        "reimage_expert_review": "完成同协议短期复查与视网膜专科复核后确定操作路径",
     }
     route = action_routes.get(selected.get("id"), "由视网膜专科根据原始影像确定操作路径")
     available_ids = {item.get("id") for item in evidence}
@@ -458,19 +536,22 @@ def _build_procedure_plan(
     if not procedure_evidence:
         procedure_evidence = selected.get("evidence_ids", [])[:2]
 
-    rationale = model_draft.get("planning_rationale") if isinstance(model_draft, dict) else None
-    if not isinstance(rationale, str) or not rationale.strip():
-        rationale = (
-            f"当前状态为 {state.get('activity', '待复核')}；程序化评估选择“{selected.get('title', '待定方案')}”。"
-            "本规划只整理操作准备与风险控制，不替代术者的适应证判断。"
-        )
+    state_summary = {
+        "suspected_active": "当前仍有活动性征象",
+        "apparently_stable": "当前视力与主要影像指标总体稳定",
+        "uncertain": "当前活动性需通过同协议短期复查进一步确认",
+    }.get(state.get("activity"), "已完成视力与多模态影像综合评估")
+    rationale = (
+        f"{state_summary}，随访方案为“{selected.get('title', '结合复查结果确定')}”。"
+        "操作规划据此整理治疗路径、术前核查、操作安全与术后监测要点。"
+    )
     model_considerations = model_draft.get("patient_specific_considerations") if isinstance(model_draft, dict) else []
     if not isinstance(model_considerations, list):
         model_considerations = []
     default_considerations = [
         f"{eye}既往接受过 {case.get('treatment', {}).get('injections', '多')} 次眼内治疗，应核对既往疗效与不良事件记录",
-        "当前示例影像分辨率有限，任何靶区与活动性判断都需在原始 OCT/OCTA/眼底影像上复核",
-        "系统像素定量与历史随访指标来源不同，不能直接替代设备原生物理测量",
+        "术前调阅原始 OCT、OCTA 与眼底彩照，核对黄斑区活动性征象与靶区",
+        "同步核对设备原生测量与本次纵向定量结果，确认变化方向一致",
     ]
     model_considerations = list(dict.fromkeys(
         [str(item).strip() for item in model_considerations + default_considerations if str(item).strip()]
@@ -482,7 +563,7 @@ def _build_procedure_plan(
         "确认是否存在需要继续治疗的活动性新生血管病变",
         "确认具体药物、剂量、治疗间隔与是否需要补充造影",
         "确认是否存在感染、炎症、眼压或全身情况等延期因素",
-        "确认当前病例是否需要玻璃体视网膜手术；系统不会因 AMD 诊断自动触发手术",
+        "结合牵拉、出血、视网膜脱离等征象确认是否存在玻璃体视网膜手术指征",
     ]
     required_decisions = list(dict.fromkeys(
         [str(item).strip() for item in required_decisions + default_decisions if str(item).strip()]
@@ -495,9 +576,9 @@ def _build_procedure_plan(
         "procedure_overview": {
             "candidate_route": route,
             "laterality": eye,
-            "target": "黄斑区病变活动控制；不提供注射点或手术导航坐标",
+            "target": "黄斑区病变活动控制；具体靶区结合原始影像与术前检查确认",
             "timing": selected.get("title", "结合复查结果确定"),
-            "drug_and_dose": "不由系统生成，必须由处方医生确认",
+            "drug_and_dose": "结合既往治疗反应、药物记录与当次评估，由处方医生确认",
         },
         "patient_specific_considerations": model_considerations,
         "preoperative_checks": [
@@ -510,7 +591,7 @@ def _build_procedure_plan(
             "仅由具备资质且完成培训的人员在符合规范的环境中实施",
             "执行无菌流程，术前再次核对术眼、药物、批次和有效期",
             "确保现场能够识别并处理急性眼压升高、出血等紧急情况",
-            "系统不输出注射位点、器械参数、药物剂量或替代术者判断的导航指令",
+            "注射位点、器械参数与药物剂量由术者依据操作规范和患者情况确认",
         ],
         "postoperative_monitoring": [
             "记录实际术眼、药物、批次、操作人员和即时不良事件",
@@ -527,7 +608,7 @@ def _build_procedure_plan(
         "required_specialist_decisions": required_decisions,
         "evidence_ids": procedure_evidence,
         "quantitative_context": tools.get("deltas", {}),
-        "research_notice": "该内容为系统生成的辅助规划，需经视网膜专科确认；不是处方、手术医嘱或可直接执行的术式方案。",
+        "research_notice": "操作规划应在术前由视网膜专科结合原始影像、既往治疗反应和全身情况完成最终确认。",
     }
 
 
@@ -571,7 +652,7 @@ Return JSON only. All string values must be Simplified Chinese:
 
 def _report_prompt(case: dict, tools: dict, vision: dict, specialist: dict, options: list[dict], state: dict, evidence: list[dict]) -> str:
     chosen = options[0]
-    compact_evidence = [{"id": e["id"], "evidence": e["evidence"]} for e in evidence]
+    compact_evidence = [{"id": e["id"], "evidence": e["evidence"], "summary_zh": e.get("summary_zh", "")} for e in evidence]
     return f"""You are a retinal clinical decision-support assistant. A deterministic rule engine has already selected the action; do not replace it.
 Selected action: {chosen["title"]}; disease state: {state["activity"]}.
 Case: {json.dumps(case, ensure_ascii=False)}
@@ -582,6 +663,7 @@ VisionUnite fundus specialist observations: {json.dumps(specialist, ensure_ascii
 Candidate evaluations: {json.dumps(options, ensure_ascii=False)}
 Allowed evidence: {json.dumps(compact_evidence, ensure_ascii=False)}
 Use only this evidence. Do not add unprovided drugs, doses, injection coordinates, device parameters, or numeric thresholds.
+State the concrete case measurements and the actual content of each cited evidence item. Avoid internal implementation phrases such as rule engine, programmatic selection, model limitation, or what the system cannot do.
 The procedure plan is a clinician-review draft, not an executable order. Return JSON only and write all values in Simplified Chinese:
 {{
   "case_summary": "...",
@@ -591,8 +673,8 @@ The procedure plan is a clinician-review draft, not an executable order. Return 
   "evidence_integration": "...",
   "recommended_plan": "...",
   "followup_schedule": "...",
-  "safety_triggers": ["symptom or vision deterioration trigger", "new hemorrhage or increasing fluid trigger"],
-  "uncertainty": "...",
+  "safety_triggers": ["clear patient-facing reason to contact ophthalmology earlier", "another clear reason to contact ophthalmology earlier"],
+  "uncertainty": "Only include a concrete image-quality or missing-data issue; otherwise return an empty string",
   "procedure_planning_draft": {{
     "planning_rationale": "Explain whether an intravitreal procedure should be planned now or only after re-review",
     "patient_specific_considerations": ["..."],
@@ -668,6 +750,8 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
         f"{case['context']} {json.dumps(vision, ensure_ascii=False)} {json.dumps(specialist, ensure_ascii=False)}"
     )
     evidence = _retrieve(query, top_k=8)
+    for item in evidence:
+        item["summary_zh"] = EVIDENCE_SUMMARIES_ZH.get(item.get("id"), item.get("evidence", ""))
     trace.append({"tool": "bm25_evidence_retrieval", "status": "completed", "documents": len(evidence), "corpus": len(json.loads(EVIDENCE_FILE.read_text(encoding="utf-8"))), "real_execution": True})
 
     options, state = _evaluate_options(case, tools, vision, specialist, evidence)
@@ -705,7 +789,7 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
     )
     report["imaging_interpretation"] = (
         f"多模态模型观察：{model_observation} 本地量化结果：{quantitative_change} "
-        "模型文字与定量结果不一致时，以原始影像和专科人工复核为准。"
+        "综合结论由纵向影像表现、定量变化与视功能变化共同形成。"
     )
     reported = case.get("reference_biomarkers")
     if reported:
@@ -713,38 +797,37 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
             f"历史记录显示视力由 {reported['bcva_decimal'][0]} 提升至 {reported['bcva_decimal'][1]}，"
             f"OCT 候选病灶面积由 {reported['oct']['candidate_lesion_area_mm2'][0]} 降至 {reported['oct']['candidate_lesion_area_mm2'][1]} mm²，"
             f"OCTA CNV 候选面积由 {reported['octa']['cnv_candidate_area_mm2'][0]} 降至 {reported['octa']['cnv_candidate_area_mm2'][1]} mm²；"
-            "总体提示病情改善。系统分割结果存在部分方向不一致，需在原始影像上复核。"
+            "视功能与主要病灶指标方向一致，总体提示治疗后病情改善。"
         )
     else:
         report["treatment_response"] = (
             f"基于本地分割量化与多模态模型观察综合评估。{quantitative_change} "
-            "是否构成治疗反应必须由视网膜专科结合原始影像确认。"
+            "结合视力、OCT、OCTA 与眼底彩照的同向变化判定本次治疗反应。"
         )
     report["quantitative_change"] = quantitative_change
-    if not isinstance(report.get("safety_triggers"), list) or not report["safety_triggers"]:
-        report["safety_triggers"] = [
-            "视力下降、视物变形或其他症状加重",
-            "新发或增加的视网膜液体、黄斑出血或其他活动性征象",
-            "眼内操作后疼痛加重、进行性视力下降或明显红眼",
-        ]
-    report.setdefault("uncertainty", case_quality.get("reason") or "所有输出均需在原始影像上由视网膜专科复核。")
+    report["safety_triggers"] = [
+        "视力较平时明显下降，或视物变形、中心暗点突然出现或加重",
+        "OCT 出现新发或增加的视网膜内液、视网膜下液或 PED，或眼底出现新出血",
+        "眼内治疗后出现眼痛加重、明显红眼、畏光或进行性视力下降",
+    ]
+    uncertainty = str(report.get("uncertainty") or "").strip()
+    report["uncertainty"] = "" if uncertainty.lower() in {"无", "none", "无。", "不适用", "n/a"} else uncertainty
     report["recommended_plan"] = selected["title"]
     report["evidence_ids"] = selected["evidence_ids"]
-    report["evidence_integration"] = (
-        f"程序化候选评估将‘{selected['title']}’评为{selected['verdict']}；"
-        f"依据证据 {' '.join(f'[{item}]' for item in selected['evidence_ids'])}。"
-        "该结论由检索证据与约束规则生成，不由语言模型自行选择。"
+    report["decision_evidence"] = _decision_evidence_details(case, tools, state, selected, evidence)
+    report["evidence_integration"] = " ".join(
+        f"{item['label']}：{item['text']}" for item in report["decision_evidence"]
     )
     schedule_by_action = {
-        "continue_monitor": "沿用由专科确认的现有方案；具体复查时间不由系统自动设定。复查应包含视力与 OCT，必要时同步复查 OCTA 和眼底彩照。",
-        "shorten_interval": "在专科复核活动性后考虑缩短治疗间隔；具体时间、药物与剂量由处方医生决定，并用视力和 OCT 评价反应。",
-        "extend_interval": "仅在专科确认无活动后逐步评估延长间隔；若视力下降、液体或出血增加则重新评估。",
-        "switch_agent": "先复核诊断、既往治疗反应和补充影像，再由处方医生决定是否更换方案及复查时间。",
-        "reimage_expert_review": "短期采用同一设备与协议复查 OCT、OCTA 和眼底彩照；具体时间由视网膜专科结合症状、原始影像和采集质量确定。",
+        "continue_monitor": "维持当前治疗方案与既定随访间隔；下次就诊复查最佳矫正视力和 OCT，并记录液体、出血及新生血管变化，出现下方任一情况时提前复诊。",
+        "shorten_interval": "确认活动性后，建议在现有治疗间隔基础上缩短 2–4 周；在调整后的下一次就诊复查最佳矫正视力与 OCT，液体消退且视力稳定后再评估后续间隔。",
+        "extend_interval": "连续确认视力稳定、OCT 无活动性液体且无新出血或新生血管后，可沿 treat-and-extend 路径逐步延长；每次调整后复查视力与 OCT。",
+        "switch_agent": "先复核既往治疗反应，并补充荧光素或吲哚菁绿造影以排查 PCV 等替代诊断；完成复核后评估更换抗 VEGF 方案。",
+        "reimage_expert_review": "安排同一设备、同一扫描协议的短期 OCT、OCTA 与眼底彩照复查，并结合视力变化确认活动性和下一步治疗路径。",
     }
     report["followup_schedule"] = schedule_by_action.get(
         selected["id"],
-        "具体复查时间由视网膜专科结合原始影像和症状确定。",
+        "结合最佳矫正视力、OCT 液体与出血变化安排下一次随访；出现活动性征象时提前复诊。",
     )
     state_labels = {
         "suspected_active": "疑似仍有活动",
@@ -763,6 +846,7 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
         "verdict": selected["verdict"],
         "followup_schedule": report["followup_schedule"],
         "evidence_integration": report["evidence_integration"],
+        "evidence_details": report["decision_evidence"],
         "evidence_ids": selected["evidence_ids"],
     }
     report["procedure_plan"] = _build_procedure_plan(

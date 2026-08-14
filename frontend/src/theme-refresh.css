@@ -217,3 +217,6 @@ main{padding-top:32px}
 .visit-upload{border-color:rgba(176,151,255,.7);background:rgba(38,35,55,.9);color:#fff}
 .visit-upload:hover{border-color:#b69cff}
 .visit-upload small{color:#d3cdec}
+.decision-evidence-list>div{border-color:#ebe7f3}.decision-evidence-list b{color:#372f50;font-size:12px}.decision-evidence-list p{color:#4f5062}
+.safety-triggers>small{color:#7f6c54;font-size:11px}.safety-triggers li{color:#5f574d;font-size:12px}.safety-triggers li::before{background:#ef9f2f}
+.evidence-card a p{color:#626376;font-size:11px}
