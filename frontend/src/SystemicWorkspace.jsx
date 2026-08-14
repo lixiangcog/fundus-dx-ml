@@ -129,7 +129,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
     <section className="systemic-station">
       <header className="systemic-station-head">
         <div>{moduleId !== 'eye-age' && <span>分析工作台</span>}<h2>上传眼底彩照，查看<em>可复算结果</em></h2></div>
-        {config.sample_note && <p>{config.sample_note}</p>}
+        {moduleId !== 'eye-age' && config.sample_note && <p>{config.sample_note}</p>}
       </header>
       <div className="systemic-grid">
         <section className="systemic-input">
