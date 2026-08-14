@@ -65,6 +65,8 @@ function App() {
     } catch { setError('默认病例加载失败，请刷新页面后重试。'); }
   };
 
+  // The sample URL is the stable identity of the selected default case.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadDefault(active); }, [activeId, active?.sample_url]);
   useEffect(() => () => { if (preview?.startsWith('blob:')) URL.revokeObjectURL(preview); }, [preview]);
 

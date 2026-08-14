@@ -22,7 +22,7 @@ def synthetic_image_bytes():
 def test_root_returns_landing_page():
     response = client.get("/")
     assert response.status_code == 200
-    assert "Fundus Classification API" in response.text or "Fundus DX" in response.text
+    assert "视界智析" in response.text or "Fundus Classification API" in response.text
 
 
 def test_health_reports_loaded_model():
