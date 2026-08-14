@@ -8,20 +8,26 @@ function timestamp() {
 
 export function useModuleLog(scope, maxEntries = 80) {
   const sequence = useRef(1);
-  const makeEntry = useCallback((level, message, detail = '') => ({
+  const makeEntry = useCallback((level, message, detail = '', channel = '') => ({
     id: `${Date.now()}-${sequence.current++}`,
-    time: timestamp(), level, message, detail,
+    time: timestamp(), level, message, detail, channel,
   }), []);
   const [entries, setEntries] = useState(() => [{
     id: `initial-${Date.now()}`, time: timestamp(), level: 'info',
-    message: `${scope}日志通道已建立`, detail: '等待操作',
+    channel: 'SYSTEM', message: 'terminal session attached', detail: `${scope} / idle`,
   }]);
-  const write = useCallback((level, message, detail = '') => {
-    const entry = makeEntry(level, message, detail);
+  const write = useCallback((level, message, detail = '', channel = '') => {
+    const entry = makeEntry(level, message, detail, channel);
     setEntries((current) => [...current, entry].slice(-maxEntries));
   }, [makeEntry, maxEntries]);
+  const writeMany = useCallback((rows) => {
+    const next = rows.map((row) => makeEntry(
+      row.level || 'info', row.message, row.detail || '', row.channel || '',
+    ));
+    setEntries((current) => [...current, ...next].slice(-maxEntries));
+  }, [makeEntry, maxEntries]);
   const clear = useCallback(() => {
-    setEntries([makeEntry('info', `${scope}日志已清空`, '继续监听运行状态')]);
+    setEntries([makeEntry('info', 'clear', `${scope} / listening`, 'SYSTEM')]);
   }, [makeEntry, scope]);
-  return { entries, write, clear };
+  return { entries, write, writeMany, clear };
 }

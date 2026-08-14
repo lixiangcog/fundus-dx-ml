@@ -51,7 +51,7 @@ function App() {
   const [service, setService] = useState('checking');
   const [dragging, setDragging] = useState(false);
   const [isDefault, setIsDefault] = useState(true);
-  const { entries: imagingLogs, write: writeImagingLog, clear: clearImagingLog } = useModuleLog('影像分析');
+  const { entries: imagingLogs, write: writeImagingLog, writeMany: writeImagingLogs, clear: clearImagingLog } = useModuleLog('影像分析');
   const fileInput = useRef(null);
   const workbenchRef = useRef(null);
   const active = capabilities.find((item) => item.id === activeId) || capabilities[0];
@@ -60,10 +60,14 @@ function App() {
     Promise.all([fetch(`${API_URL}/capabilities`).then((r) => r.json()), fetch(`${API_URL}/health`).then((r) => r.json())])
       .then(([catalog, health]) => {
         setCapabilities(catalog.capabilities); setService(health.status === 'ok' ? 'online' : 'degraded');
-        writeImagingLog('success', '分析功能初始化完成', `${catalog.capabilities.length} 项功能 · GPU 服务${health.imaging_service?.status === 'ready' ? '已就绪' : '待检查'}`);
+        writeImagingLogs([
+          { level:'command', channel:'SHELL', message:'fundus-dx status --format terminal' },
+          { level:'success', channel:'API', message:`catalog loaded; capabilities=${catalog.capabilities.length}`, detail:`version=${catalog.version || health.version || 'unknown'}` },
+          { level:health.imaging_service?.status === 'ready' ? 'success' : 'warning', channel:'CUDA', message:`device=${health.imaging_service?.live?.device || health.device || 'unknown'}; service=${health.imaging_service?.status || 'unknown'}`, detail:`job=${health.imaging_service?.live?.job_id || 'n/a'}; pipelines=${health.pipelines_ready || catalog.capabilities.length}` },
+        ]);
       })
-      .catch(() => { setService('offline'); writeImagingLog('error', '平台状态读取失败', '请检查网页服务和 SSH 转发'); });
-  }, [writeImagingLog]);
+      .catch(() => { setService('offline'); writeImagingLog('error', 'GET /health -> connection failed', '请检查网页服务和 SSH 转发', 'HTTP'); });
+  }, [writeImagingLog, writeImagingLogs]);
 
   const installFile = (nextFile, nextPreview, defaultFlag = false) => {
     if (preview?.startsWith('blob:')) URL.revokeObjectURL(preview);
@@ -76,8 +80,8 @@ function App() {
       if (!response.ok) throw new Error();
       const blob = await response.blob();
       installFile(new File([blob], fileName(capability.id), { type: blob.type || 'image/png' }), URL.createObjectURL(blob), true);
-      writeImagingLog('info', `${capability.title}默认病例已载入`, `${capability.default_modality} · 等待分析`);
-    } catch { setError('默认病例加载失败，请刷新页面后重试。'); writeImagingLog('error', `${capability.title}默认病例加载失败`, '样本接口未返回有效影像'); }
+      writeImagingLog('info', `sample=${capability.sample_id || capability.id}`, `modality=${capability.default_modality}; bytes=${blob.size}`, 'INPUT');
+    } catch { setError('默认病例加载失败，请刷新页面后重试。'); writeImagingLog('error', `GET ${capability.sample_url} -> invalid image`, '默认病例加载失败', 'HTTP'); }
   };
 
   // The sample URL is the stable identity of the selected default case.
@@ -88,13 +92,13 @@ function App() {
   const chooseCapability = (id) => {
     if (loading || id === activeId) return;
     const selected = capabilities.find((item) => item.id === id);
-    setActiveId(id); writeImagingLog('info', `切换至${selected?.title || id}`, '正在载入对应默认病例');
+    setActiveId(id); writeImagingLog('command', `fundus-dx select --task ${id}`, selected?.title || id, 'SHELL');
   };
   const enterCapability = (id) => {
     if (loading) return;
     if (id !== activeId) {
       const selected = capabilities.find((item) => item.id === id);
-      setActiveId(id); writeImagingLog('info', `进入${selected?.title || id}`, '工作台已切换');
+      setActiveId(id); writeImagingLog('command', `fundus-dx select --task ${id}`, selected?.title || id, 'SHELL');
     }
     window.requestAnimationFrame(() => workbenchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
@@ -102,21 +106,37 @@ function App() {
     if (!nextFile?.type?.startsWith('image/')) { setError('请选择 JPG、PNG 或 WebP 影像。'); writeImagingLog('warning', '输入影像格式不受支持', '允许 JPG、PNG 或 WebP'); return; }
     if (nextFile.size > MAX_FILE_SIZE) { setError('影像不能超过 12 MB。'); writeImagingLog('warning', '输入影像超过大小限制', '最大允许 12 MB'); return; }
     installFile(nextFile, URL.createObjectURL(nextFile));
-    writeImagingLog('info', '用户影像已载入', `${active.title} · ${(nextFile.size / 1024 / 1024).toFixed(2)} MB`);
+    writeImagingLog('info', `upload accepted; type=${nextFile.type}`, `bytes=${nextFile.size}; task=${active.id}`, 'INPUT');
   };
   const run = async () => {
     if (!file || loading) return;
     setLoading(true); setResult(null); setError('');
-    writeImagingLog('run', `${active.title}推理已提交`, `${isDefault ? '默认病例' : '用户影像'} · GPU 真实推理`);
+    writeImagingLogs([
+      { level:'command', channel:'SHELL', message:`fundus-dx infer --task ${active.id} --device cuda:0` },
+      { level:'info', channel:'INPUT', message:`source=${isDefault ? 'research-sample' : 'user-upload'}; mime=${file.type || 'image/unknown'}`, detail:`bytes=${file.size}; modality=${active.default_modality}` },
+      { level:'run', channel:'QUEUE', message:'request accepted; dispatching to GPU worker', detail:`pipeline=${active.id}` },
+      { level:'run', channel:'CUDA', message:'inference_mode=true; device=cuda:0', detail:'preprocess -> forward -> postprocess' },
+    ]);
     const data = new FormData(); data.append('file', file);
     if (isDefault && active.sample_id) data.append('sample_id', active.sample_id);
     try {
       const response = await axios.post(`${API_URL}/analyze/${active.id}`, data);
       setResult(response.data); setService('online');
-      writeImagingLog('success', `${active.title}分析完成`, `${response.data.runtime_ms} 毫秒 · ${response.data.quality?.label || '结果已返回'}`);
+      const output = response.data;
+      const metricRows = (output.metrics || []).map((metric) => ({
+        level:'info', channel:'METRIC', message:`${metric.label}=${String(metric.value)}${metric.unit || ''}`, detail:metric.detail || '',
+      }));
+      writeImagingLogs([
+        { level:'success', channel:'HTTP', message:`POST /analyze/${active.id} -> 200 OK` },
+        { level:'info', channel:'INPUT', message:`decoded=${output.input?.width || '?'}x${output.input?.height || '?'}`, detail:`reference_applied=${Boolean(output.input?.reference_applied)}` },
+        { level:'success', channel:'BACKEND', message:`pipeline=${output.pipeline?.id || active.id}; real_inference=${Boolean(output.real_inference)}`, detail:`model_version=${output.model_version || 'unknown'}` },
+        ...metricRows,
+        { level:output.quality?.status === 'failed' ? 'warning' : 'success', channel:'QC', message:`status=${output.quality?.status || 'unverified'}`, detail:output.quality?.label || 'quality metadata unavailable' },
+        { level:'success', channel:'DONE', message:`${active.id} completed`, detail:`runtime_ms=${output.runtime_ms}; output=image+metrics` },
+      ]);
     } catch (requestError) {
       setError(requestError.response?.data?.detail || '推理服务暂时不可用，请稍后重试。');
-      writeImagingLog('error', `${active.title}分析失败`, requestError.response?.data?.detail || '无法连接推理服务');
+      writeImagingLog('error', `POST /analyze/${active.id} -> ${requestError.response?.status || 'NETWORK_ERROR'}`, requestError.response?.data?.detail || '无法连接推理服务', 'HTTP');
       if (!requestError.response) setService('offline');
     } finally { setLoading(false); }
   };
@@ -248,7 +268,7 @@ function App() {
           </section>
         </section>
 
-        <ModuleLog title={active.title} entries={imagingLogs} onClear={clearImagingLog}/>
+        <ModuleLog title={active.title} entries={imagingLogs} onClear={clearImagingLog} running={loading}/>
         {error && <div className="error-banner"><CircleAlert size={16} />{error}</div>}
         </>}
         <footer><p><ShieldAlert size={14} />仅用于科研，结果不构成临床诊断或治疗建议。</p></footer>

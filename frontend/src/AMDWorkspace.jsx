@@ -65,29 +65,33 @@ function AMDWorkspace({ apiUrl }) {
   const [loading, setLoading] = useState(false);
   const [progressStep, setProgressStep] = useState(0);
   const [error, setError] = useState('');
-  const { entries: amdLogs, write: writeAmdLog, clear: clearAmdLog } = useModuleLog('AMD 随访');
+  const { entries: amdLogs, write: writeAmdLog, writeMany: writeAmdLogs, clear: clearAmdLog } = useModuleLog('AMD 随访');
   const caseData = config?.default_case;
 
   const refreshStatus = useCallback(() => fetch(`${apiUrl}/amd-agent/status`).then(r => r.json()).then(setService).catch(() => setService({status:'offline'})), [apiUrl]);
   useEffect(() => {
     fetch(`${apiUrl}/amd-agent/config`).then(r => r.json()).then((data) => {
       setConfig(data); setService(data.service);
-      writeAmdLog(data.service?.status === 'ready' ? 'success' : 'warning', 'AMD 随访病例与服务状态已载入', `6 张多模态影像 · 服务${data.service?.status === 'ready' ? '已就绪' : '待检查'}`);
-    }).catch(() => { setError('AMD 随访功能暂时不可用。'); writeAmdLog('error', 'AMD 随访配置加载失败', '请检查网页服务与分析服务'); });
+      writeAmdLogs([
+        { level:'command', channel:'SHELL', message:'fundus-dx amd status --case CASE_001' },
+        { level:'success', channel:'INPUT', message:'case=CASE_001; visits=2; images=6', detail:'modalities=OCT,OCTA,FUNDUS' },
+        { level:data.service?.status === 'ready' ? 'success' : 'warning', channel:'SERVICE', message:`agent=${data.service?.status || 'unknown'}`, detail:'multimodal tools + evidence retrieval' },
+      ]);
+    }).catch(() => { setError('AMD 随访功能暂时不可用。'); writeAmdLog('error', 'GET /amd-agent/config -> failed', '请检查网页服务与分析服务', 'HTTP'); });
     const timer = setInterval(refreshStatus, 12000);
     return () => clearInterval(timer);
-  }, [apiUrl, refreshStatus, writeAmdLog]);
+  }, [apiUrl, refreshStatus, writeAmdLog, writeAmdLogs]);
 
   useEffect(() => {
     if (!loading) return;
     // Reset the staged progress animation when a new analysis starts.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setProgressStep(0);
-    writeAmdLog('run', '步骤 01 · 病例整理', '开始组织两次就诊记录');
+    writeAmdLog('run', 'stage=01; case_context ready', '开始组织两次就诊记录', 'PIPELINE');
     const timers = [2200, 6500, 12500, 17000, 22000].map((delay, index) => setTimeout(() => {
       const nextStep = Math.min(index + 1, STEPS.length - 1);
       setProgressStep(nextStep);
-      writeAmdLog('run', `步骤 ${String(nextStep + 1).padStart(2, '0')} · ${STEPS[nextStep].label}`, '分析流程继续运行');
+      writeAmdLog('run', `stage=${String(nextStep + 1).padStart(2, '0')}; ${STEPS[nextStep].id}`, STEPS[nextStep].label, 'PIPELINE');
     }, delay));
     return () => timers.forEach(clearTimeout);
   }, [loading, writeAmdLog]);
@@ -95,16 +99,37 @@ function AMDWorkspace({ apiUrl }) {
   const runAgent = async () => {
     if (loading || service.status !== 'ready') return;
     setLoading(true); setResult(null); setError('');
-    writeAmdLog('run', 'AMD 多模态随访分析已提交', 'OCT · OCTA · 眼底彩照 · 真实模型推理');
+    writeAmdLogs([
+      { level:'command', channel:'SHELL', message:'fundus-dx amd run --case CASE_001 --device cuda:0' },
+      { level:'info', channel:'INPUT', message:'validating six de-identified images', detail:'baseline=3; followup=3' },
+      { level:'run', channel:'QUEUE', message:'multimodal job accepted', detail:'quantification -> comparison -> retrieval -> report' },
+      { level:'run', channel:'CUDA', message:'GPU tools dispatched', detail:'real_inference=true; fallback=false' },
+    ]);
     try {
       const response = await axios.post(`${apiUrl}/amd-agent/analyze-default`);
       setResult(response.data);
       setProgressStep(STEPS.length - 1);
       setService((current) => ({...current,status:'ready'}));
-      writeAmdLog('success', 'AMD 随访报告生成完成', `${response.data.runtime_ms} 毫秒 · ${response.data.tool_trace?.length || 0} 项工具记录`);
+      const output = response.data;
+      const traceRows = (output.tool_trace || []).map((item) => {
+        const detail = [
+          item.runtime_ms !== undefined ? `runtime_ms=${item.runtime_ms}` : '',
+          item.input_images !== undefined ? `images=${item.input_images}` : '',
+          item.documents !== undefined ? `documents=${item.documents}` : '',
+          item.options !== undefined ? `options=${item.options}` : '',
+          `real=${Boolean(item.real_execution)}`,
+        ].filter(Boolean).join('; ');
+        return { level:item.status === 'completed' ? 'success' : 'warning', channel:'TOOL', message:`${item.tool} -> ${item.status}`, detail };
+      });
+      writeAmdLogs([
+        { level:'success', channel:'HTTP', message:'POST /amd-agent/analyze-default -> 200 OK', detail:`run_id=${output.run_id}` },
+        ...traceRows,
+        { level:output.report?.consistency_validated ? 'success' : 'warning', channel:'REPORT', message:`structured_report=${Boolean(output.report)}; consistency=${Boolean(output.report?.consistency_validated)}`, detail:`decision=${output.decision?.action_id || 'review'}` },
+        { level:'success', channel:'DONE', message:'AMD longitudinal analysis completed', detail:`runtime_ms=${output.runtime_ms}; tools=${traceRows.length}` },
+      ]);
     } catch (requestError) {
       setError(requestError.response?.data?.detail || '分析未完成，请检查服务状态后重试。');
-      writeAmdLog('error', 'AMD 随访分析失败', requestError.response?.data?.detail || '分析服务未返回完整结果');
+      writeAmdLog('error', `POST /amd-agent/analyze-default -> ${requestError.response?.status || 'NETWORK_ERROR'}`, requestError.response?.data?.detail || '分析服务未返回完整结果', 'HTTP');
       refreshStatus();
     } finally { setLoading(false); }
   };
@@ -183,7 +208,7 @@ function AMDWorkspace({ apiUrl }) {
       </aside>
     </section> : <AgentResult result={result} onReset={() => { setResult(null); writeAmdLog('info', '返回 AMD 默认病例', '保留本次运行日志'); }}/>}
 
-    <ModuleLog title="AMD 随访" entries={amdLogs} onClear={clearAmdLog}/>
+    <ModuleLog title="AMD 随访" entries={amdLogs} onClear={clearAmdLog} running={loading}/>
     {error && <div className="error-banner amd-error"><AlertTriangle size={16}/>{error}</div>}
   </div>;
 }

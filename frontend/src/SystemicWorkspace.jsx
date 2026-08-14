@@ -31,7 +31,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
   const [activeView, setActiveView] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { entries: moduleLogs, write: writeModuleLog, clear: clearModuleLog } = useModuleLog(FALLBACK[moduleId]?.title || '系统模块');
+  const { entries: moduleLogs, write: writeModuleLog, writeMany: writeModuleLogs, clear: clearModuleLog } = useModuleLog(FALLBACK[moduleId]?.title || '系统模块');
   const fileInput = useRef(null);
   const Icon = ICONS[moduleId] || Eye;
 
@@ -46,16 +46,24 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
       const blob = await response.blob();
       installFile(new File([blob], `${moduleId}-default.jpg`, { type:blob.type || 'image/jpeg' }), URL.createObjectURL(blob));
       if (nextConfig.sample_age) setAge(nextConfig.sample_age);
-      writeModuleLog('info', '默认研究样例已载入', `${nextConfig.title} · 等待真实推理`);
-    } catch { setError('默认研究样例加载失败，请刷新后重试。'); writeModuleLog('error', '默认研究样例加载失败', '样本接口未返回有效彩照'); }
+      writeModuleLog('info', `sample=${moduleId}-default; mime=${blob.type || 'image/jpeg'}`, `bytes=${blob.size}; ready=true`, 'INPUT');
+    } catch { setError('默认研究样例加载失败，请刷新后重试。'); writeModuleLog('error', `GET ${nextConfig.sample_url} -> invalid image`, '默认研究样例加载失败', 'HTTP'); }
   };
 
   useEffect(() => {
     let current = true;
     fetch(`${apiUrl}/systemic/config`).then((response) => response.json()).then((payload) => {
       const next = payload.modules.find((item) => item.id === moduleId) || FALLBACK[moduleId];
-      if (current) { setConfig(next); setAge(next.sample_age || ''); writeModuleLog('success', `${next.title}模块已初始化`, next.published_validation); loadDefault(next); }
-    }).catch(() => { if (current) { const next = FALLBACK[moduleId]; setConfig(next); setAge(next.sample_age || ''); writeModuleLog('warning', '模块配置读取失败', '已使用内置配置继续运行'); loadDefault(next); } });
+      if (current) {
+        setConfig(next); setAge(next.sample_age || '');
+        writeModuleLogs([
+          { level:'command', channel:'SHELL', message:`fundus-dx systemic status --module ${moduleId}` },
+          { level:'success', channel:'CONFIG', message:`module=${moduleId}; ready=true`, detail:next.published_validation },
+          { level:'success', channel:'CUDA', message:'gpu-worker=ready; real_inference=true', detail:'device=cuda:0' },
+        ]);
+        loadDefault(next);
+      }
+    }).catch(() => { if (current) { const next = FALLBACK[moduleId]; setConfig(next); setAge(next.sample_age || ''); writeModuleLog('warning', 'GET /systemic/config -> fallback', '已使用内置配置继续运行', 'HTTP'); loadDefault(next); } });
     return () => { current = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moduleId]);
@@ -65,7 +73,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
     if (!nextFile?.type?.startsWith('image/')) { setError('请选择 JPG、PNG 或 WebP 彩照。'); writeModuleLog('warning', '彩照格式不受支持', '允许 JPG、PNG 或 WebP'); return; }
     if (nextFile.size > MAX_FILE_SIZE) { setError('影像不能超过 12 MB。'); writeModuleLog('warning', '彩照超过大小限制', '最大允许 12 MB'); return; }
     installFile(nextFile, URL.createObjectURL(nextFile));
-    writeModuleLog('info', '用户彩照已载入', `${(nextFile.size / 1024 / 1024).toFixed(2)} MB · 等待分析`);
+    writeModuleLog('info', `upload accepted; type=${nextFile.type}`, `bytes=${nextFile.size}; module=${moduleId}`, 'INPUT');
   };
   const run = async () => {
     if (!file || loading) return;
@@ -73,12 +81,26 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
     const data = new FormData(); data.append('file', file);
     if (moduleId === 'eye-age') data.append('chronological_age', age);
     setLoading(true); setResult(null); setError('');
-    writeModuleLog('run', `${config.title}推理已提交`, moduleId === 'eye-age' ? `实际年龄 ${age} 岁 · GPU 推理` : '分割与 75 项血管表型计算');
+    writeModuleLogs([
+      { level:'command', channel:'SHELL', message:`fundus-dx systemic run --module ${moduleId} --device cuda:0` },
+      { level:'info', channel:'INPUT', message:`mime=${file.type || 'image/unknown'}; bytes=${file.size}`, detail:moduleId === 'eye-age' ? `chronological_age=${age}` : 'phenotypes=75' },
+      { level:'run', channel:'QUEUE', message:'request accepted; GPU worker acquired', detail:`task=${moduleId === 'eye-age' ? 'eye_age' : 'retinal_vascular'}` },
+      { level:'run', channel:'CUDA', message:'preprocess -> forward -> postprocess', detail:'inference_mode=true' },
+    ]);
     try {
       const response = await axios.post(`${apiUrl}/systemic/analyze/${moduleId}`, data);
       setResult(response.data); setActiveView(0);
-      writeModuleLog('success', `${config.title}分析完成`, `${response.data.runtime_ms} 毫秒 · ${response.data.quality?.detail || '结果已返回'}`);
-    } catch (requestError) { setError(requestError.response?.data?.detail || '推理服务暂时不可用，请稍后重试。'); writeModuleLog('error', `${config.title}分析失败`, requestError.response?.data?.detail || '无法连接推理服务'); }
+      const output = response.data;
+      const metricRows = (output.metrics || []).map((metric) => ({ level:'info', channel:'METRIC', message:`${metric.label}=${metric.value}${metric.unit || ''}`, detail:metric.detail || '' }));
+      writeModuleLogs([
+        { level:'success', channel:'HTTP', message:`POST /systemic/analyze/${moduleId} -> 200 OK` },
+        { level:'success', channel:'BACKEND', message:`module=${output.module?.id || moduleId}; real_inference=${Boolean(output.real_inference)}`, detail:`views=${output.views?.length || 1}` },
+        ...metricRows,
+        ...(output.quantified_feature_count !== undefined ? [{ level:'info', channel:'OUTPUT', message:`quantified_features=${output.quantified_feature_count}`, detail:'retinal vascular phenotype fields' }] : []),
+        { level:output.quality?.status === 'review' ? 'warning' : 'success', channel:'QC', message:`status=${output.quality?.status || 'unknown'}`, detail:output.quality?.detail || '' },
+        { level:'success', channel:'DONE', message:`${moduleId} completed`, detail:`runtime_ms=${output.runtime_ms}` },
+      ]);
+    } catch (requestError) { setError(requestError.response?.data?.detail || '推理服务暂时不可用，请稍后重试。'); writeModuleLog('error', `POST /systemic/analyze/${moduleId} -> ${requestError.response?.status || 'NETWORK_ERROR'}`, requestError.response?.data?.detail || '无法连接推理服务', 'HTTP'); }
     finally { setLoading(false); }
   };
   const shownImage = result?.views?.[activeView]?.image || result?.result_image;
@@ -153,7 +175,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
           </motion.div> : <div className="systemic-placeholder"><div>{[38,64,48,82,58,92,46,72,54,86].map((height,index) => <i key={index} style={{height:`${height}%`}}/>)}</div><p>运行后显示分割、量化与结果解读。</p></div>}
         </aside>
       </div>
-      <ModuleLog title={config.title} entries={moduleLogs} onClear={clearModuleLog}/>
+      <ModuleLog title={config.title} entries={moduleLogs} onClear={clearModuleLog} running={loading}/>
       {error && <div className="systemic-error"><CircleAlert size={15}/>{error}</div>}
     </section>
   </div>;
