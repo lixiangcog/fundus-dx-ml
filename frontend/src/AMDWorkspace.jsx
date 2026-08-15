@@ -379,7 +379,7 @@ function AMDWorkspace({ apiUrl }) {
             {MODALITIES.map(([key,label]) => {
               const field = `${index === 0 ? 'baseline' : 'followup'}_${key}`;
               const image = caseImages[field];
-              return <div className={`visit-image editable ${image?.file ? 'uploaded' : ''}`} key={key}>
+              return <div className={`visit-image editable modality-${key} ${image?.file ? 'uploaded' : ''}`} key={key}>
                 <img src={image?.preview || visit.images[key]} alt={`${visit.label} ${key}`}/>
                 <span>{label}</span><i/>
                 <label className="visit-upload"><UploadCloud size={13}/><b>{image?.file ? '更换影像' : '上传替换'}</b><small>{image?.file ? image.file.name : '当前为默认影像'}</small>
@@ -387,7 +387,7 @@ function AMDWorkspace({ apiUrl }) {
                 </label>
               </div>;
             })}
-            {index === 0 && <div className="visit-arrow"><ArrowRight size={17}/><small>3 个月</small></div>}
+            {index === 0 && <div className="visit-arrow"><ArrowRight size={17}/><small>约 1 年</small></div>}
           </div>)}
         </div>
       </section>

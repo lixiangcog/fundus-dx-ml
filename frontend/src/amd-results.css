@@ -498,6 +498,9 @@
 .visit-image.editable { height: 148px; }
 .visit-image.editable img { transition: opacity .18s, transform .25s; }
 .visit-image.editable:hover img { opacity: .66; transform: scale(1.015); }
+.visit-image.editable.modality-oct { height: 178px; }
+.visit-image.editable.modality-octa { height: 208px; }
+.visit-image.editable.modality-fundus { height: 220px; }
 .visit-image.editable.uploaded { border-color: var(--cyan); }
 
 .visit-upload {
@@ -529,6 +532,9 @@
   .case-context { padding-left: 16px; padding-right: 16px; }
   .case-field-row { grid-template-columns: 98px 1fr; }
   .visit-image.editable { height: 138px; }
+  .visit-image.editable.modality-oct { height: 160px; }
+  .visit-image.editable.modality-octa { height: 182px; }
+  .visit-image.editable.modality-fundus { height: 192px; }
   .visit-upload small { display: none; }
   .visit-upload { grid-template-columns: 15px auto; right: 6px; bottom: 6px; left: auto; }
 }

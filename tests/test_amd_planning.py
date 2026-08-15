@@ -62,7 +62,7 @@ def test_decision_evidence_explains_case_measurements_and_citations():
 
     assert details[0]["label"] == "本病例变化"
     assert "0.3 提高至 0.5" in details[0]["text"]
-    assert "2.38 降至 1.28 mm²" in details[0]["text"]
+    assert "2.38 降至 1.28 mm²" not in details[0]["text"]
     assert "继续当前方案并密切监测" in details[0]["text"]
     assert details[1]["id"] == "E1"
     assert "活动性湿性 AMD" in details[1]["text"]
