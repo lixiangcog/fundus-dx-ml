@@ -43,7 +43,7 @@ SYSTEMIC_MODULES: dict[str, dict[str, Any]] = {
         "subtitle": "结合眼底影像与健康信息评估脑卒中风险",
         "sample_file": "HRF_07_dr.jpg",
         "sample_profile": DEFAULT_STROKE_PROFILE,
-        "sample_note": "高分辨率眼底彩照研究样例",
+        "sample_note": "",
         "source_url": "https://github.com/Eyened/retinalysis-vascx",
         "weights_url": "https://huggingface.co/Eyened/vascx",
         "license": "Apache-2.0（代码）/ AGPL-3.0（权重）",

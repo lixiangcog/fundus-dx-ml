@@ -14,7 +14,7 @@ const DEFAULT_STROKE_PROFILE = { age:67, sex:'male', systolic_bp:145, smoker:fal
 const FALLBACK = {
   'eye-age': { id:'eye-age', number:'03', title:'眼龄', subtitle:'估算视网膜表观年龄，并与实际年龄对照', sample_age:57, sample_note:'', sample_url:'/systemic/sample/eye-age', published_validation:'公开测试集 MAE 5.09 岁' },
   'cardiovascular-retina': { id:'cardiovascular-retina', number:'04', title:'眼观心血管', subtitle:'提取与心血管研究相关的视网膜微血管表型', sample_note:'高分辨率眼底彩照研究样例', sample_url:'/systemic/sample/cardiovascular-retina', published_validation:'75 项血管表型可复算' },
-  'cerebrovascular-retina': { id:'cerebrovascular-retina', number:'05', title:'眼观脑血管', subtitle:'结合眼底影像与健康信息评估脑卒中风险', sample_profile:DEFAULT_STROKE_PROFILE, sample_note:'高分辨率眼底彩照研究样例', sample_url:'/systemic/sample/cerebrovascular-retina', published_validation:'10 年首次卒中风险评估' },
+  'cerebrovascular-retina': { id:'cerebrovascular-retina', number:'05', title:'眼观脑血管', subtitle:'结合眼底影像与健康信息评估脑卒中风险', sample_profile:DEFAULT_STROKE_PROFILE, sample_note:'', sample_url:'/systemic/sample/cerebrovascular-retina', published_validation:'10 年首次卒中风险评估' },
 };
 const ICONS = { 'eye-age': Eye, 'cardiovascular-retina': HeartPulse, 'cerebrovascular-retina': Brain };
 const STEPS = {
@@ -146,7 +146,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
     <section className="systemic-station">
       <header className="systemic-station-head">
         <div>{moduleId !== 'eye-age' && <span>分析工作台</span>}<h2>上传眼底彩照，查看<em>可复算结果</em></h2></div>
-        {moduleId !== 'eye-age' && config.sample_note && <p>{config.sample_note}</p>}
+        {moduleId !== 'eye-age' && moduleId !== 'cerebrovascular-retina' && config.sample_note && <p>{config.sample_note}</p>}
       </header>
       <div className="systemic-grid">
         <section className="systemic-input">
@@ -197,7 +197,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
         <aside className="systemic-metrics">
           <div className="systemic-panel-head"><span><Activity size={14}/>定量结果</span>{result && <small>{result.status_label}</small>}</div>
           {result ? <motion.div className="systemic-result-copy" initial={{opacity:0,y:6}} animate={{opacity:1,y:0}}>
-            {moduleId !== 'eye-age' && <div className={`systemic-quality ${result.quality.status}`}><span><Check size={13}/>{result.quality.label}</span><small>{result.quality.detail}</small></div>}
+            {moduleId !== 'eye-age' && moduleId !== 'cerebrovascular-retina' && <div className={`systemic-quality ${result.quality.status}`}><span><Check size={13}/>{result.quality.label}</span><small>{result.quality.detail}</small></div>}
             <h3>{result.summary}</h3>
             <div className="systemic-metric-list">{result.metrics.map((metric) => <div key={metric.label}><span>{metric.label}<small>{metric.detail}</small></span><strong>{metric.value}<em>{metric.unit}</em></strong></div>)}</div>
             <div className="systemic-findings">{result.sections.map((section) => <div key={section.title}><b>{section.title}</b><p>{section.text}</p></div>)}</div>
