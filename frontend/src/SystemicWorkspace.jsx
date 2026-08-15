@@ -13,13 +13,13 @@ const MAX_FILE_SIZE = 12 * 1024 * 1024;
 const DEFAULT_STROKE_PROFILE = { age:67, sex:'male', systolic_bp:145, smoker:false, diabetes:true, atrial_fibrillation:false, antihypertensive:true, cardiovascular_disease:false };
 const FALLBACK = {
   'eye-age': { id:'eye-age', number:'03', title:'眼龄', subtitle:'估算视网膜表观年龄，并与实际年龄对照', sample_age:57, sample_note:'', sample_url:'/systemic/sample/eye-age', published_validation:'公开测试集 MAE 5.09 岁' },
-  'cardiovascular-retina': { id:'cardiovascular-retina', number:'04', title:'眼观心血管', subtitle:'提取与心血管研究相关的视网膜微血管表型', sample_note:'高分辨率眼底彩照研究样例', sample_url:'/systemic/sample/cardiovascular-retina', published_validation:'75 项血管表型可复算' },
+  'cardiovascular-retina': { id:'cardiovascular-retina', number:'04', title:'眼观心血管', subtitle:'联合彩照与 OCTA 评估冠心病相关视网膜风险', sample_note:'', sample_url:'/systemic/sample/cardiovascular-retina', sample_octa_url:'/systemic/sample/cardiovascular-retina?modality=octa', published_validation:'CFP + OCTA 联合风险评估' },
   'cerebrovascular-retina': { id:'cerebrovascular-retina', number:'05', title:'眼观脑血管', subtitle:'结合眼底影像与健康信息评估脑卒中风险', sample_profile:DEFAULT_STROKE_PROFILE, sample_note:'', sample_url:'/systemic/sample/cerebrovascular-retina', published_validation:'10 年首次卒中风险评估' },
 };
 const ICONS = { 'eye-age': Eye, 'cardiovascular-retina': HeartPulse, 'cerebrovascular-retina': Brain };
 const STEPS = {
   'eye-age': ['彩照标准化', '眼龄估算', '年龄差对照'],
-  'cardiovascular-retina': ['动静脉分割', '形态量化', '表型归纳'],
+  'cardiovascular-retina': ['双模态输入', '微血管量化', '冠心病风险'],
   'cerebrovascular-retina': ['眼底解读', '血管量化', '风险评估'],
 };
 
@@ -27,6 +27,8 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
   const [config, setConfig] = useState(FALLBACK[moduleId]);
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState('');
+  const [octaFile, setOctaFile] = useState(null);
+  const [octaPreview, setOctaPreview] = useState('');
   const [age, setAge] = useState(FALLBACK[moduleId]?.sample_age || '');
   const [strokeProfile, setStrokeProfile] = useState({ ...DEFAULT_STROKE_PROFILE });
   const [result, setResult] = useState(null);
@@ -35,6 +37,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
   const [error, setError] = useState('');
   const { entries: moduleLogs, write: writeModuleLog, writeMany: writeModuleLogs, clear: clearModuleLog } = useModuleLog(FALLBACK[moduleId]?.title || '系统模块');
   const fileInput = useRef(null);
+  const octaInput = useRef(null);
   const Icon = ICONS[moduleId] || Eye;
   const updateStrokeProfile = (key, value) => setStrokeProfile((current) => ({ ...current, [key]:value }));
 
@@ -42,12 +45,23 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
     if (preview.startsWith('blob:')) URL.revokeObjectURL(preview);
     setFile(nextFile); setPreview(url); setResult(null); setActiveView(0); setError('');
   };
+  const installOctaFile = (nextFile, url) => {
+    if (octaPreview.startsWith('blob:')) URL.revokeObjectURL(octaPreview);
+    setOctaFile(nextFile); setOctaPreview(url); setResult(null); setActiveView(0); setError('');
+  };
   const loadDefault = async (nextConfig = config) => {
     try {
       const response = await fetch(`${apiUrl}${nextConfig.sample_url}`);
       if (!response.ok) throw new Error();
       const blob = await response.blob();
       installFile(new File([blob], `${moduleId}-default.jpg`, { type:blob.type || 'image/jpeg' }), URL.createObjectURL(blob));
+      if (moduleId === 'cardiovascular-retina' && nextConfig.sample_octa_url) {
+        const octaResponse = await fetch(`${apiUrl}${nextConfig.sample_octa_url}`);
+        if (!octaResponse.ok) throw new Error();
+        const octaBlob = await octaResponse.blob();
+        installOctaFile(new File([octaBlob], 'cardiovascular-default-octa.png', { type:octaBlob.type || 'image/png' }), URL.createObjectURL(octaBlob));
+        writeModuleLog('info', `sample=cardiovascular-default-octa; mime=${octaBlob.type || 'image/png'}`, `bytes=${octaBlob.size}; ready=true`, 'INPUT');
+      }
       if (nextConfig.sample_age) setAge(nextConfig.sample_age);
       if (nextConfig.sample_profile) setStrokeProfile({ ...nextConfig.sample_profile });
       writeModuleLog('info', `sample=${moduleId}-default; mime=${blob.type || 'image/jpeg'}`, `bytes=${blob.size}; ready=true`, 'INPUT');
@@ -72,6 +86,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moduleId]);
   useEffect(() => () => { if (preview.startsWith('blob:')) URL.revokeObjectURL(preview); }, [preview]);
+  useEffect(() => () => { if (octaPreview.startsWith('blob:')) URL.revokeObjectURL(octaPreview); }, [octaPreview]);
 
   const chooseFile = (nextFile) => {
     if (!nextFile?.type?.startsWith('image/')) { setError('请选择 JPG、PNG 或 WebP 彩照。'); writeModuleLog('warning', '彩照格式不受支持', '允许 JPG、PNG 或 WebP'); return; }
@@ -79,8 +94,14 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
     installFile(nextFile, URL.createObjectURL(nextFile));
     writeModuleLog('info', `upload accepted; type=${nextFile.type}`, `bytes=${nextFile.size}; module=${moduleId}`, 'INPUT');
   };
+  const chooseOctaFile = (nextFile) => {
+    if (!nextFile?.type?.startsWith('image/')) { setError('请选择 JPG、PNG 或 WebP OCTA。'); writeModuleLog('warning', 'OCTA 格式不受支持', '允许 JPG、PNG 或 WebP'); return; }
+    if (nextFile.size > MAX_FILE_SIZE) { setError('影像不能超过 12 MB。'); writeModuleLog('warning', 'OCTA 超过大小限制', '最大允许 12 MB'); return; }
+    installOctaFile(nextFile, URL.createObjectURL(nextFile));
+    writeModuleLog('info', `octa upload accepted; type=${nextFile.type}`, `bytes=${nextFile.size}; module=${moduleId}`, 'INPUT');
+  };
   const run = async () => {
-    if (!file || loading) return;
+    if (!file || loading || (moduleId === 'cardiovascular-retina' && !octaFile)) return;
     if (moduleId === 'eye-age' && (!age || Number(age) < 18 || Number(age) > 100)) { setError('请输入 18 至 100 岁的实际年龄。'); writeModuleLog('warning', '实际年龄校验未通过', '请输入 18 至 100 岁'); return; }
     if (moduleId === 'cerebrovascular-retina' && (Number(strokeProfile.age) < 55 || Number(strokeProfile.age) > 84 || Number(strokeProfile.systolic_bp) < 80 || Number(strokeProfile.systolic_bp) > 240)) {
       setError('请检查年龄和收缩压：年龄 55–84 岁，收缩压 80–240 mmHg。');
@@ -89,6 +110,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
     }
     const data = new FormData(); data.append('file', file);
     if (moduleId === 'eye-age') data.append('chronological_age', age);
+    if (moduleId === 'cardiovascular-retina') data.append('octa_file', octaFile);
     if (moduleId === 'cerebrovascular-retina') {
       data.append('risk_age', strokeProfile.age);
       data.append('risk_sex', strokeProfile.sex);
@@ -98,7 +120,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
     setLoading(true); setResult(null); setError('');
     writeModuleLogs([
       { level:'command', channel:'SHELL', message:`fundus-dx systemic run --module ${moduleId} --device cuda:0` },
-      { level:'info', channel:'INPUT', message:`mime=${file.type || 'image/unknown'}; bytes=${file.size}`, detail:moduleId === 'eye-age' ? `chronological_age=${age}` : moduleId === 'cerebrovascular-retina' ? `age=${strokeProfile.age}; sbp=${strokeProfile.systolic_bp}; sex=${strokeProfile.sex}` : 'phenotypes=75' },
+      { level:'info', channel:'INPUT', message:`mime=${file.type || 'image/unknown'}; bytes=${file.size}`, detail:moduleId === 'eye-age' ? `chronological_age=${age}` : moduleId === 'cerebrovascular-retina' ? `age=${strokeProfile.age}; sbp=${strokeProfile.systolic_bp}; sex=${strokeProfile.sex}` : `cfp_bytes=${file.size}; octa_bytes=${octaFile?.size || 0}` },
       { level:'run', channel:'QUEUE', message:'request accepted; GPU worker acquired', detail:`task=${moduleId === 'eye-age' ? 'eye_age' : 'retinal_vascular'}` },
       { level:'run', channel:'CUDA', message:'preprocess -> forward -> postprocess', detail:'inference_mode=true' },
     ]);
@@ -145,17 +167,24 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
 
     <section className="systemic-station">
       <header className="systemic-station-head">
-        <div>{moduleId !== 'eye-age' && <span>分析工作台</span>}<h2>上传眼底彩照，查看<em>可复算结果</em></h2></div>
+        <div>{moduleId !== 'eye-age' && <span>分析工作台</span>}<h2>{moduleId === 'cardiovascular-retina' ? '上传彩照与 OCTA，查看' : '上传眼底彩照，查看'}<em>可复算结果</em></h2></div>
         {moduleId !== 'eye-age' && moduleId !== 'cerebrovascular-retina' && config.sample_note && <p>{config.sample_note}</p>}
       </header>
       <div className="systemic-grid">
         <section className="systemic-input">
           <div className="systemic-panel-head"><span><FileImage size={14}/>输入彩照</span><small>默认样例可直接运行</small></div>
-          <div className="systemic-image-frame">
+          <div className={`systemic-image-frame ${moduleId === 'cardiovascular-retina' ? 'cardio-image-frame' : ''}`}>
             <span className="corner tl"/><span className="corner tr"/><span className="corner bl"/><span className="corner br"/>
+            {moduleId === 'cardiovascular-retina' && <span className="systemic-modality-label">CFP 彩照</span>}
             {preview ? <img src={preview} alt="输入眼底彩照"/> : <div className="systemic-empty"><ScanLine size={28}/>等待彩照</div>}
             <i className="systemic-scan"/>
           </div>
+          {moduleId === 'cardiovascular-retina' && <div className="systemic-image-frame cardio-image-frame">
+            <span className="corner tl"/><span className="corner tr"/><span className="corner bl"/><span className="corner br"/>
+            <span className="systemic-modality-label">OCTA</span>
+            {octaPreview ? <img src={octaPreview} alt="输入 OCTA"/> : <div className="systemic-empty"><ScanLine size={28}/>等待 OCTA</div>}
+            <i className="systemic-scan"/>
+          </div>}
           {moduleId === 'eye-age' && <label className="age-input"><span>实际年龄</span><input type="number" min="18" max="100" value={age} onChange={(event) => setAge(event.target.value)}/><em>岁</em></label>}
           {moduleId === 'cerebrovascular-retina' && <div className="stroke-profile">
             <div className="stroke-profile-primary">
@@ -174,7 +203,9 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
             <button onClick={() => fileInput.current?.click()}><UploadCloud size={15}/>上传彩照</button>
             <button onClick={() => loadDefault()}><RotateCcw size={14}/>恢复样例</button>
             <input ref={fileInput} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { if (event.target.files?.[0]) chooseFile(event.target.files[0]); event.target.value=''; }}/>
+            {moduleId === 'cardiovascular-retina' && <button onClick={() => octaInput.current?.click()}><UploadCloud size={15}/>上传 OCTA</button>}
           </div>
+            <input ref={octaInput} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { if (event.target.files?.[0]) chooseOctaFile(event.target.files[0]); event.target.value=''; }}/>
         </section>
 
         <div className={`systemic-bridge ${loading ? 'running' : ''}`} aria-hidden="true"><i/><span/><b/></div>
@@ -184,14 +215,14 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
           <div className={`systemic-image-frame ${result ? 'complete' : ''}`}>
             <span className="corner tl"/><span className="corner tr"/><span className="corner bl"/><span className="corner br"/>
             <AnimatePresence mode="wait">
-              {loading ? <motion.div key="loading" className="systemic-processing" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}><LoaderCircle size={32}/><b>正在分析</b><small>{moduleId === 'eye-age' ? '正在估算眼龄' : moduleId === 'cerebrovascular-retina' ? '正在进行眼底解读与风险评估' : '正在分割并计算血管表型'}</small><i/></motion.div>
+              {loading ? <motion.div key="loading" className="systemic-processing" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}><LoaderCircle size={32}/><b>正在分析</b><small>{moduleId === 'eye-age' ? '正在估算眼龄' : moduleId === 'cerebrovascular-retina' ? '正在进行眼底解读与风险评估' : '正在联合分析彩照与 OCTA'}</small><i/></motion.div>
                 : result ? <motion.img key={shownImage} src={shownImage} alt="分析结果" initial={{opacity:0,scale:.985}} animate={{opacity:1,scale:1}}/>
                 : <motion.div key="waiting" className="systemic-waiting" initial={{opacity:0}} animate={{opacity:1}}><Icon size={30}/><b>等待分析</b><small>内置样例已就绪</small></motion.div>}
             </AnimatePresence>
             {result && <span className="systemic-done"><Check size={12}/>分析完成</span>}
           </div>
           {result?.views?.length > 1 && <nav className="view-switch">{result.views.map((view,index) => <button key={view.label} className={activeView === index ? 'active' : ''} onClick={() => { setActiveView(index); writeModuleLog('info', `切换结果视图：${view.label}`, '显示内容已更新'); }}>{view.label}</button>)}</nav>}
-          <button className="systemic-run" onClick={run} disabled={!file || loading}><Play size={16} fill="currentColor"/>{loading ? '正在分析' : `开始${config.title}分析`}</button>
+          <button className="systemic-run" onClick={run} disabled={!file || loading || (moduleId === 'cardiovascular-retina' && !octaFile)}><Play size={16} fill="currentColor"/>{loading ? '正在分析' : `开始${config.title}分析`}</button>
         </section>
 
         <aside className="systemic-metrics">

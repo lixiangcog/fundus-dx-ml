@@ -156,8 +156,8 @@ async def systemic_config():
 
 
 @app.get("/systemic/sample/{module_id}")
-async def systemic_sample(module_id: str):
-    path = systemic_sample_path(module_id)
+async def systemic_sample(module_id: str, modality: str = "cfp"):
+    path = systemic_sample_path(module_id, modality)
     if path is None or not path.is_file():
         raise HTTPException(status_code=404, detail="研究样本不存在")
     return FileResponse(path, headers={"Cache-Control": "no-store, max-age=0"})
@@ -167,6 +167,7 @@ async def systemic_sample(module_id: str):
 async def analyze_systemic(
     module_id: str,
     file: UploadFile = File(...),
+    octa_file: UploadFile | None = File(None),
     chronological_age: float | None = Form(None),
     risk_age: int | None = Form(None),
     risk_sex: str | None = Form(None),
@@ -182,6 +183,8 @@ async def analyze_systemic(
     if chronological_age is not None and not 18 <= chronological_age <= 100:
         raise HTTPException(status_code=400, detail="实际年龄应在 18 至 100 岁之间")
     risk_profile = None
+    if module_id == "cardiovascular-retina" and octa_file is None:
+        raise HTTPException(status_code=400, detail="请同时上传眼底彩照和 OCTA")
     if module_id == "cerebrovascular-retina":
         if risk_age is None or not 55 <= risk_age <= 84:
             raise HTTPException(status_code=400, detail="卒中风险评估年龄应在 55 至 84 岁之间")
@@ -204,6 +207,11 @@ async def analyze_systemic(
     upload_dir.mkdir(parents=True, exist_ok=True)
     image_path = upload_dir / f"{uuid.uuid4().hex}.png"
     image.save(image_path, format="PNG")
+    octa_image_path = None
+    if octa_file is not None:
+        octa_image = await read_image(octa_file)
+        octa_image_path = upload_dir / f"{uuid.uuid4().hex}.png"
+        octa_image.save(octa_image_path, format="PNG")
     try:
         return await asyncio.to_thread(
             run_systemic_module,
@@ -211,12 +219,14 @@ async def analyze_systemic(
             image_path,
             chronological_age,
             risk_profile,
+            octa_image_path,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     finally:
         image_path.unlink(missing_ok=True)
-
+        if octa_image_path is not None:
+            octa_image_path.unlink(missing_ok=True)
 
 @app.get("/research-samples/{sample_id}")
 async def research_sample(sample_id: str):

@@ -69,6 +69,14 @@
   .systemic-grid{grid-template-columns:minmax(250px,.75fr) 44px minmax(310px,1fr) 310px}.systemic-input,.systemic-output{padding:20px 14px}.systemic-output{padding-left:5px}.systemic-metrics{padding:20px 15px}.systemic-image-frame{height:370px}.systemic-findings{grid-template-columns:1fr}.systemic-findings p{display:none}
 }
 
+.systemic-cardiovascular-retina .systemic-grid{min-height:720px}
+.systemic-cardiovascular-retina .systemic-findings{grid-template-columns:1fr}
+.systemic-cardiovascular-retina .systemic-findings p{display:block}
+.systemic-cardiovascular-retina .cardio-image-frame{height:188px;min-height:160px}
+.systemic-cardiovascular-retina .cardio-image-frame+.cardio-image-frame{margin-top:8px}
+.systemic-modality-label{position:absolute;left:10px;top:10px;z-index:4;padding:5px 8px;background:rgba(2,13,17,.85);border-left:2px solid var(--module);color:var(--module);font-size:9px;font-weight:600;letter-spacing:.5px}
+.systemic-cardiovascular-retina .systemic-actions button{padding:0 7px}
+
 .stroke-profile{margin-top:10px;border:1px solid rgba(var(--module-rgb),.18);background:rgba(var(--module-rgb),.035);padding:10px;display:flex;flex-direction:column;gap:9px}
 .stroke-profile-primary{display:grid;grid-template-columns:.8fr .72fr 1.2fr;gap:7px}
 .stroke-profile-primary label{height:48px;border:1px solid rgba(var(--module-rgb),.16);padding:5px 8px;display:grid;grid-template-columns:1fr auto;grid-template-rows:16px 22px;align-items:center;color:#77969c}

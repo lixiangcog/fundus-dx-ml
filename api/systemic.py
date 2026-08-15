@@ -3,9 +3,12 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from PIL import Image
 
 from api.imaging_client import infer
 from api.stroke_agent import DEFAULT_STROKE_PROFILE, analyze_stroke_risk
+from api.coronary_agent import analyze_coronary_risk
+from api.pipelines_v3 import vascular_quantification
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SAMPLE_ROOT = PROJECT_ROOT / "runtime" / "research_samples" / "systemic"
@@ -28,13 +31,14 @@ SYSTEMIC_MODULES: dict[str, dict[str, Any]] = {
         "id": "cardiovascular-retina",
         "number": "04",
         "title": "眼观心血管",
-        "subtitle": "提取与心血管研究相关的视网膜微血管表型",
+        "subtitle": "联合彩照与 OCTA 评估冠心病相关视网膜风险",
         "sample_file": "HRF_04_g.jpg",
+        "sample_octa_file": "octa_synthetic_232653.png",
         "sample_note": "高分辨率眼底彩照研究样例",
         "source_url": "https://github.com/Eyened/retinalysis-vascx",
         "weights_url": "https://huggingface.co/Eyened/vascx",
         "license": "Apache-2.0（代码）/ AGPL-3.0（权重）",
-        "published_validation": "公开权重 · 75 项血管表型可复算",
+        "published_validation": "CFP + OCTA 联合风险评估",
     },
     "cerebrovascular-retina": {
         "id": "cerebrovascular-retina",
@@ -53,17 +57,23 @@ SYSTEMIC_MODULES: dict[str, dict[str, Any]] = {
 
 
 def public_config() -> list[dict[str, Any]]:
-    return [
-        {
+    result = []
+    for module_id, module in SYSTEMIC_MODULES.items():
+        public = {
             key: value for key, value in module.items()
-            if key != "sample_file"
-        } | {"sample_url": f"/systemic/sample/{module_id}"}
-        for module_id, module in SYSTEMIC_MODULES.items()
-    ]
+            if key not in {"sample_file", "sample_octa_file"}
+        }
+        public["sample_url"] = f"/systemic/sample/{module_id}"
+        if module.get("sample_octa_file"):
+            public["sample_octa_url"] = f"/systemic/sample/{module_id}?modality=octa"
+        result.append(public)
+    return result
 
 
-def sample_path(module_id: str) -> Path | None:
+def sample_path(module_id: str, modality: str = "cfp") -> Path | None:
     module = SYSTEMIC_MODULES.get(module_id)
+    if module and modality == "octa" and module.get("sample_octa_file"):
+        return PROJECT_ROOT / "runtime" / "research_samples" / module["sample_octa_file"]
     return SAMPLE_ROOT / module["sample_file"] if module else None
 
 
@@ -168,6 +178,59 @@ def _vascular(module_id: str, result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _cardiovascular(
+    module: dict[str, Any],
+    cfp_result: dict[str, Any],
+    octa_result: dict[str, Any],
+    cfp_path: Path,
+    octa_path: Path,
+) -> dict[str, Any]:
+    assessment = analyze_coronary_risk(cfp_path, octa_path, cfp_result, octa_result)
+    cfp = assessment["cfp_metrics"]
+    octa = assessment["octa_metrics"]
+    octa_probability = next(
+        (item["image"] for item in octa_result.get("auxiliary_images", []) if item.get("label") == "血管概率图"),
+        octa_result["result_image"],
+    )
+    return {
+        "summary": f"冠心病相关视网膜风险信号：{assessment['risk_label']}",
+        "status_label": "联合评估完成",
+        "metrics": [
+            _metric("冠心病风险信号", assessment["risk_label"], "", "CFP 与 OCTA 联合评估"),
+            _metric("OCTA 血管密度", f"{octa['vessel_density_percent']:.2f}", "%", "毛细血管灌注代理"),
+            _metric("OCTA 分形维数", f"{octa['fractal_dimension']:.3f}", "", "血管网络复杂度"),
+            _metric("动静脉口径比", f"{cfp['arteriovenous_ratio']:.3f}", "", "CFP 中央血管口径比"),
+        ],
+        "sections": [
+            {"title": "彩照表现", "text": assessment["cfp_summary"]},
+            {"title": "OCTA 表现", "text": assessment["octa_summary"]},
+            {"title": "判断依据", "text": assessment["integrated_summary"]},
+            {"title": "建议检查", "text": "；".join(assessment["recommended_checks"])},
+        ],
+        "quality": _quality(cfp_result.get("quality", {})),
+        "result_image": f"data:image/png;base64,{cfp_result['overlay_png']}",
+        "views": [
+            {"label": "彩照血管分析", "image": f"data:image/png;base64,{cfp_result['overlay_png']}"},
+            {"label": "OCTA 微血管", "image": octa_result["result_image"]},
+            {"label": "OCTA 概率图", "image": octa_probability},
+            {"label": "彩照血管分割", "image": f"data:image/png;base64,{cfp_result['vessels_png']}"},
+        ],
+        "coronary_assessment": assessment,
+        "trace": assessment["trace"],
+        "quantified_feature_count": (
+            sum(value is not None for value in cfp_result["biomarkers"].values())
+            + len(octa_result.get("metrics", []))
+        ),
+        "runtime_ms": round(
+            float(cfp_result.get("runtime_ms", 0))
+            + float(octa_result.get("runtime_ms", 0))
+            + assessment["runtime_ms"],
+            1,
+        ),
+        "notice": "",
+    }
+
+
 def _cerebrovascular(
     module: dict[str, Any],
     result: dict[str, Any],
@@ -212,6 +275,7 @@ def run_module(
     image_path: Path,
     chronological_age: float | None = None,
     risk_profile: dict[str, Any] | None = None,
+    octa_image_path: Path | None = None,
 ) -> dict[str, Any]:
     module = SYSTEMIC_MODULES.get(module_id)
     if module is None:
@@ -220,12 +284,19 @@ def run_module(
     raw = infer(task, image_path)
     if module_id == "eye-age":
         output = _eye_age(module, raw, chronological_age)
+    elif module_id == "cardiovascular-retina":
+        if octa_image_path is None:
+            raise ValueError("心血管风险评估需要同时提供彩照和 OCTA")
+        octa_result = vascular_quantification(
+            Image.open(octa_image_path).convert("RGB"), image_path=octa_image_path
+        )
+        output = _cardiovascular(module, raw, octa_result, image_path, octa_image_path)
     elif module_id == "cerebrovascular-retina":
         output = _cerebrovascular(module, raw, image_path, risk_profile or DEFAULT_STROKE_PROFILE)
     else:
         output = _vascular(module_id, raw)
     return {
-        "module": {key: value for key, value in module.items() if key != "sample_file"},
+        "module": {key: value for key, value in module.items() if key not in {"sample_file", "sample_octa_file"}},
         **output,
         "runtime_ms": output.get("runtime_ms", raw["runtime_ms"]),
         "real_inference": True,
