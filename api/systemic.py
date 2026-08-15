@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from api.imaging_client import infer
+from api.stroke_agent import DEFAULT_STROKE_PROFILE, analyze_stroke_risk
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SAMPLE_ROOT = PROJECT_ROOT / "runtime" / "research_samples" / "systemic"
@@ -39,13 +40,14 @@ SYSTEMIC_MODULES: dict[str, dict[str, Any]] = {
         "id": "cerebrovascular-retina",
         "number": "05",
         "title": "眼观脑血管",
-        "subtitle": "分析与脑小血管研究相关的视网膜微循环表型",
+        "subtitle": "结合眼底影像与健康信息评估脑卒中风险",
         "sample_file": "HRF_07_dr.jpg",
+        "sample_profile": DEFAULT_STROKE_PROFILE,
         "sample_note": "高分辨率眼底彩照研究样例",
         "source_url": "https://github.com/Eyened/retinalysis-vascx",
         "weights_url": "https://huggingface.co/Eyened/vascx",
         "license": "Apache-2.0（代码）/ AGPL-3.0（权重）",
-        "published_validation": "公开权重 · 75 项血管表型可复算",
+        "published_validation": "10 年首次卒中风险评估",
     },
 }
 
@@ -166,20 +168,69 @@ def _vascular(module_id: str, result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def run_module(module_id: str, image_path: Path, chronological_age: float | None = None) -> dict[str, Any]:
+def _cerebrovascular(
+    module: dict[str, Any],
+    result: dict[str, Any],
+    image_path: Path,
+    risk_profile: dict[str, Any],
+) -> dict[str, Any]:
+    assessment = analyze_stroke_risk(image_path, result, risk_profile)
+    risk = assessment["risk"]
+    vascular = assessment["vascular"]
+    return {
+        "summary": f"10 年首次卒中风险 {risk['percent']:.1f}%，当前分层为{risk['band']}",
+        "status_label": "评估完成",
+        "metrics": [
+            _metric("10 年卒中风险", f"{risk['percent']:.1f}", "%", "首次卒中风险"),
+            _metric("血管密度", f"{vascular['vessel_density_percent']:.2f}", "%", "视盘周围血管密度"),
+            _metric("动静脉口径比", f"{vascular['arteriovenous_ratio']:.3f}", "", "中央血管口径比"),
+            _metric("血管迂曲度", f"{vascular['vessel_tortuosity']:.3f}", "", "长度加权迂曲度"),
+        ],
+        "sections": [
+            {"title": "眼底影像", "text": "；".join(assessment["image_findings"])},
+            {"title": "主要危险因素", "text": "；".join(assessment["risk_drivers"])},
+            {"title": "综合评估", "text": assessment["integrated_interpretation"]},
+            {"title": "建议检查", "text": "；".join(assessment["recommended_checks"])},
+        ],
+        "quality": _quality(result.get("quality", {})),
+        "result_image": f"data:image/png;base64,{result['overlay_png']}",
+        "views": [
+            {"label": "血管分析", "image": f"data:image/png;base64,{result['overlay_png']}"},
+            {"label": "血管分割", "image": f"data:image/png;base64,{result['vessels_png']}"},
+            {"label": "标准化彩照", "image": f"data:image/png;base64,{result['preprocessed_png']}"},
+        ],
+        "stroke_assessment": assessment,
+        "trace": assessment["trace"],
+        "quantified_feature_count": sum(value is not None for value in result["biomarkers"].values()),
+        "runtime_ms": round(float(result.get("runtime_ms", 0)) + assessment["runtime_ms"], 1),
+        "notice": "",
+    }
+
+
+def run_module(
+    module_id: str,
+    image_path: Path,
+    chronological_age: float | None = None,
+    risk_profile: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     module = SYSTEMIC_MODULES.get(module_id)
     if module is None:
         raise KeyError(module_id)
     task = "eye_age" if module_id == "eye-age" else "retinal_vascular"
     raw = infer(task, image_path)
-    output = _eye_age(module, raw, chronological_age) if module_id == "eye-age" else _vascular(module_id, raw)
+    if module_id == "eye-age":
+        output = _eye_age(module, raw, chronological_age)
+    elif module_id == "cerebrovascular-retina":
+        output = _cerebrovascular(module, raw, image_path, risk_profile or DEFAULT_STROKE_PROFILE)
+    else:
+        output = _vascular(module_id, raw)
     return {
         "module": {key: value for key, value in module.items() if key != "sample_file"},
         **output,
-        "runtime_ms": raw["runtime_ms"],
+        "runtime_ms": output.get("runtime_ms", raw["runtime_ms"]),
         "real_inference": True,
-        "notice": (
+        "notice": output.get("notice", (
             "" if module_id == "eye-age"
             else "输出为视网膜微血管表型，不等同于心脑血管疾病诊断或患病概率。"
-        ),
+        )),
     }

@@ -10,16 +10,17 @@ import { useModuleLog } from './useModuleLog';
 import './systemic.css';
 
 const MAX_FILE_SIZE = 12 * 1024 * 1024;
+const DEFAULT_STROKE_PROFILE = { age:67, sex:'male', systolic_bp:145, smoker:false, diabetes:true, atrial_fibrillation:false, antihypertensive:true, cardiovascular_disease:false };
 const FALLBACK = {
   'eye-age': { id:'eye-age', number:'03', title:'眼龄', subtitle:'估算视网膜表观年龄，并与实际年龄对照', sample_age:57, sample_note:'', sample_url:'/systemic/sample/eye-age', published_validation:'公开测试集 MAE 5.09 岁' },
   'cardiovascular-retina': { id:'cardiovascular-retina', number:'04', title:'眼观心血管', subtitle:'提取与心血管研究相关的视网膜微血管表型', sample_note:'高分辨率眼底彩照研究样例', sample_url:'/systemic/sample/cardiovascular-retina', published_validation:'75 项血管表型可复算' },
-  'cerebrovascular-retina': { id:'cerebrovascular-retina', number:'05', title:'眼观脑血管', subtitle:'分析与脑小血管研究相关的视网膜微循环表型', sample_note:'高分辨率眼底彩照研究样例', sample_url:'/systemic/sample/cerebrovascular-retina', published_validation:'75 项血管表型可复算' },
+  'cerebrovascular-retina': { id:'cerebrovascular-retina', number:'05', title:'眼观脑血管', subtitle:'结合眼底影像与健康信息评估脑卒中风险', sample_profile:DEFAULT_STROKE_PROFILE, sample_note:'高分辨率眼底彩照研究样例', sample_url:'/systemic/sample/cerebrovascular-retina', published_validation:'10 年首次卒中风险评估' },
 };
 const ICONS = { 'eye-age': Eye, 'cardiovascular-retina': HeartPulse, 'cerebrovascular-retina': Brain };
 const STEPS = {
   'eye-age': ['彩照标准化', '眼龄估算', '年龄差对照'],
   'cardiovascular-retina': ['动静脉分割', '形态量化', '表型归纳'],
-  'cerebrovascular-retina': ['微血管分割', '分布量化', '表型归纳'],
+  'cerebrovascular-retina': ['眼底解读', '血管量化', '风险评估'],
 };
 
 function SystemicWorkspace({ apiUrl, moduleId }) {
@@ -27,6 +28,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState('');
   const [age, setAge] = useState(FALLBACK[moduleId]?.sample_age || '');
+  const [strokeProfile, setStrokeProfile] = useState({ ...DEFAULT_STROKE_PROFILE });
   const [result, setResult] = useState(null);
   const [activeView, setActiveView] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -34,6 +36,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
   const { entries: moduleLogs, write: writeModuleLog, writeMany: writeModuleLogs, clear: clearModuleLog } = useModuleLog(FALLBACK[moduleId]?.title || '系统模块');
   const fileInput = useRef(null);
   const Icon = ICONS[moduleId] || Eye;
+  const updateStrokeProfile = (key, value) => setStrokeProfile((current) => ({ ...current, [key]:value }));
 
   const installFile = (nextFile, url) => {
     if (preview.startsWith('blob:')) URL.revokeObjectURL(preview);
@@ -46,6 +49,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
       const blob = await response.blob();
       installFile(new File([blob], `${moduleId}-default.jpg`, { type:blob.type || 'image/jpeg' }), URL.createObjectURL(blob));
       if (nextConfig.sample_age) setAge(nextConfig.sample_age);
+      if (nextConfig.sample_profile) setStrokeProfile({ ...nextConfig.sample_profile });
       writeModuleLog('info', `sample=${moduleId}-default; mime=${blob.type || 'image/jpeg'}`, `bytes=${blob.size}; ready=true`, 'INPUT');
     } catch { setError('默认研究样例加载失败，请刷新后重试。'); writeModuleLog('error', `GET ${nextConfig.sample_url} -> invalid image`, '默认研究样例加载失败', 'HTTP'); }
   };
@@ -78,12 +82,23 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
   const run = async () => {
     if (!file || loading) return;
     if (moduleId === 'eye-age' && (!age || Number(age) < 18 || Number(age) > 100)) { setError('请输入 18 至 100 岁的实际年龄。'); writeModuleLog('warning', '实际年龄校验未通过', '请输入 18 至 100 岁'); return; }
+    if (moduleId === 'cerebrovascular-retina' && (Number(strokeProfile.age) < 55 || Number(strokeProfile.age) > 84 || Number(strokeProfile.systolic_bp) < 80 || Number(strokeProfile.systolic_bp) > 240)) {
+      setError('请检查年龄和收缩压：年龄 55–84 岁，收缩压 80–240 mmHg。');
+      writeModuleLog('warning', '卒中风险输入校验未通过', 'age=55..84; systolic_bp=80..240');
+      return;
+    }
     const data = new FormData(); data.append('file', file);
     if (moduleId === 'eye-age') data.append('chronological_age', age);
+    if (moduleId === 'cerebrovascular-retina') {
+      data.append('risk_age', strokeProfile.age);
+      data.append('risk_sex', strokeProfile.sex);
+      data.append('systolic_bp', strokeProfile.systolic_bp);
+      ['smoker','diabetes','atrial_fibrillation','antihypertensive','cardiovascular_disease'].forEach((key) => data.append(key, String(Boolean(strokeProfile[key]))));
+    }
     setLoading(true); setResult(null); setError('');
     writeModuleLogs([
       { level:'command', channel:'SHELL', message:`fundus-dx systemic run --module ${moduleId} --device cuda:0` },
-      { level:'info', channel:'INPUT', message:`mime=${file.type || 'image/unknown'}; bytes=${file.size}`, detail:moduleId === 'eye-age' ? `chronological_age=${age}` : 'phenotypes=75' },
+      { level:'info', channel:'INPUT', message:`mime=${file.type || 'image/unknown'}; bytes=${file.size}`, detail:moduleId === 'eye-age' ? `chronological_age=${age}` : moduleId === 'cerebrovascular-retina' ? `age=${strokeProfile.age}; sbp=${strokeProfile.systolic_bp}; sex=${strokeProfile.sex}` : 'phenotypes=75' },
       { level:'run', channel:'QUEUE', message:'request accepted; GPU worker acquired', detail:`task=${moduleId === 'eye-age' ? 'eye_age' : 'retinal_vascular'}` },
       { level:'run', channel:'CUDA', message:'preprocess -> forward -> postprocess', detail:'inference_mode=true' },
     ]);
@@ -92,9 +107,11 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
       setResult(response.data); setActiveView(0);
       const output = response.data;
       const metricRows = (output.metrics || []).map((metric) => ({ level:'info', channel:'METRIC', message:`${metric.label}=${metric.value}${metric.unit || ''}`, detail:metric.detail || '' }));
+      const traceRows = (output.trace || []).map((step) => ({ level:'success', channel:'MODEL', message:`${step.tool} -> ${step.status}`, detail:`${step.model || step.method || 'executed'}${step.runtime_ms !== undefined ? `; runtime_ms=${step.runtime_ms}` : ''}` }));
       writeModuleLogs([
         { level:'success', channel:'HTTP', message:`POST /systemic/analyze/${moduleId} -> 200 OK` },
         { level:'success', channel:'BACKEND', message:`module=${output.module?.id || moduleId}; real_inference=${Boolean(output.real_inference)}`, detail:`views=${output.views?.length || 1}` },
+        ...traceRows,
         ...metricRows,
         ...(output.quantified_feature_count !== undefined ? [{ level:'info', channel:'OUTPUT', message:`quantified_features=${output.quantified_feature_count}`, detail:'retinal vascular phenotype fields' }] : []),
         { level:output.quality?.status === 'review' ? 'warning' : 'success', channel:'QC', message:`status=${output.quality?.status || 'unknown'}`, detail:output.quality?.detail || '' },
@@ -140,6 +157,19 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
             <i className="systemic-scan"/>
           </div>
           {moduleId === 'eye-age' && <label className="age-input"><span>实际年龄</span><input type="number" min="18" max="100" value={age} onChange={(event) => setAge(event.target.value)}/><em>岁</em></label>}
+          {moduleId === 'cerebrovascular-retina' && <div className="stroke-profile">
+            <div className="stroke-profile-primary">
+              <label><span>年龄</span><input type="number" min="55" max="84" value={strokeProfile.age} onChange={(event) => updateStrokeProfile('age', event.target.value)}/><em>岁</em></label>
+              <label><span>性别</span><select value={strokeProfile.sex} onChange={(event) => updateStrokeProfile('sex', event.target.value)}><option value="male">男</option><option value="female">女</option></select></label>
+              <label><span>收缩压</span><input type="number" min="80" max="240" value={strokeProfile.systolic_bp} onChange={(event) => updateStrokeProfile('systolic_bp', event.target.value)}/><em>mmHg</em></label>
+            </div>
+            <div className="stroke-profile-flags">
+              {[
+                ['smoker','吸烟'], ['diabetes','糖尿病'], ['atrial_fibrillation','房颤'],
+                ['antihypertensive','降压治疗'], ['cardiovascular_disease','心血管病'],
+              ].map(([key,label]) => <button type="button" key={key} className={strokeProfile[key] ? 'active' : ''} onClick={() => updateStrokeProfile(key, !strokeProfile[key])}><span>{strokeProfile[key] ? <Check size={11}/> : null}</span>{label}</button>)}
+            </div>
+          </div>}
           <div className="systemic-actions">
             <button onClick={() => fileInput.current?.click()}><UploadCloud size={15}/>上传彩照</button>
             <button onClick={() => loadDefault()}><RotateCcw size={14}/>恢复样例</button>
@@ -154,7 +184,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
           <div className={`systemic-image-frame ${result ? 'complete' : ''}`}>
             <span className="corner tl"/><span className="corner tr"/><span className="corner bl"/><span className="corner br"/>
             <AnimatePresence mode="wait">
-              {loading ? <motion.div key="loading" className="systemic-processing" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}><LoaderCircle size={32}/><b>正在分析</b><small>{moduleId === 'eye-age' ? '正在估算眼龄' : '正在分割并计算血管表型'}</small><i/></motion.div>
+              {loading ? <motion.div key="loading" className="systemic-processing" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}><LoaderCircle size={32}/><b>正在分析</b><small>{moduleId === 'eye-age' ? '正在估算眼龄' : moduleId === 'cerebrovascular-retina' ? '正在进行眼底解读与风险评估' : '正在分割并计算血管表型'}</small><i/></motion.div>
                 : result ? <motion.img key={shownImage} src={shownImage} alt="分析结果" initial={{opacity:0,scale:.985}} animate={{opacity:1,scale:1}}/>
                 : <motion.div key="waiting" className="systemic-waiting" initial={{opacity:0}} animate={{opacity:1}}><Icon size={30}/><b>等待分析</b><small>内置样例已就绪</small></motion.div>}
             </AnimatePresence>

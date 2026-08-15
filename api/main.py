@@ -168,18 +168,50 @@ async def analyze_systemic(
     module_id: str,
     file: UploadFile = File(...),
     chronological_age: float | None = Form(None),
+    risk_age: int | None = Form(None),
+    risk_sex: str | None = Form(None),
+    systolic_bp: float | None = Form(None),
+    smoker: bool = Form(False),
+    diabetes: bool = Form(False),
+    atrial_fibrillation: bool = Form(False),
+    antihypertensive: bool = Form(False),
+    cardiovascular_disease: bool = Form(False),
 ):
     if module_id not in SYSTEMIC_MODULES:
         raise HTTPException(status_code=404, detail="未知研究模块")
     if chronological_age is not None and not 18 <= chronological_age <= 100:
         raise HTTPException(status_code=400, detail="实际年龄应在 18 至 100 岁之间")
+    risk_profile = None
+    if module_id == "cerebrovascular-retina":
+        if risk_age is None or not 55 <= risk_age <= 84:
+            raise HTTPException(status_code=400, detail="卒中风险评估年龄应在 55 至 84 岁之间")
+        if risk_sex not in {"male", "female"}:
+            raise HTTPException(status_code=400, detail="请选择性别")
+        if systolic_bp is None or not 80 <= systolic_bp <= 240:
+            raise HTTPException(status_code=400, detail="收缩压应在 80 至 240 mmHg 之间")
+        risk_profile = {
+            "age": risk_age,
+            "sex": risk_sex,
+            "systolic_bp": systolic_bp,
+            "smoker": smoker,
+            "diabetes": diabetes,
+            "atrial_fibrillation": atrial_fibrillation,
+            "antihypertensive": antihypertensive,
+            "cardiovascular_disease": cardiovascular_disease,
+        }
     image = await read_image(file)
     upload_dir = PROJECT_ROOT / "runtime" / "systemic_uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
     image_path = upload_dir / f"{uuid.uuid4().hex}.png"
     image.save(image_path, format="PNG")
     try:
-        return await asyncio.to_thread(run_systemic_module, module_id, image_path, chronological_age)
+        return await asyncio.to_thread(
+            run_systemic_module,
+            module_id,
+            image_path,
+            chronological_age,
+            risk_profile,
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     finally:

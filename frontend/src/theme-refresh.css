@@ -220,3 +220,8 @@ main{padding-top:32px}
 .decision-evidence-list>div{border-color:#ebe7f3}.decision-evidence-list b{color:#372f50;font-size:12px}.decision-evidence-list p{color:#4f5062}
 .safety-triggers>small{color:#7f6c54;font-size:11px}.safety-triggers li{color:#5f574d;font-size:12px}.safety-triggers li::before{background:#ef9f2f}
 .evidence-card a p{color:#626376;font-size:11px}
+
+.stroke-profile{border-color:#ded8ef;border-radius:12px;background:#faf9ff}
+.stroke-profile-primary label{border-color:#e3def0;border-radius:8px;background:#fff;color:#5f6072}
+.stroke-profile-primary label span{font-size:10px}.stroke-profile-primary input,.stroke-profile-primary select{color:#292a38;font-size:13px}.stroke-profile-primary em{font-size:9px}
+.stroke-profile-flags button{border-color:#ded8ed;border-radius:8px;background:#fff;color:#666779;font-size:11px}.stroke-profile-flags button span{border-color:#cbbcf0;border-radius:4px}.stroke-profile-flags button.active{border-color:#8f61f7;background:#eee8ff;color:#6125e4}
