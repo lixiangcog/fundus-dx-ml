@@ -1,6 +1,8 @@
 """Research modules for retinal age and systemic microvascular phenotyping."""
 from __future__ import annotations
 
+import base64
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 from PIL import Image
@@ -95,6 +97,31 @@ def _quality(raw: dict[str, Any]) -> dict[str, Any]:
         "detail": f"关键结构检查 {completed}/4 通过" if completed is not None else "视野覆盖检查已完成",
         "checks": raw.get("checks", {}),
     }
+
+def _crop_model_canvas(encoded_png: str, source_path: Path) -> str:
+    """Remove model letterboxing while preserving the source image aspect ratio."""
+    try:
+        with Image.open(source_path) as source:
+            source_width, source_height = source.size
+        image = Image.open(BytesIO(base64.b64decode(encoded_png))).convert("RGB")
+        width, height = image.size
+        source_ratio = source_width / source_height
+        canvas_ratio = width / height
+        if abs(source_ratio - canvas_ratio) < 0.02:
+            return encoded_png
+        if canvas_ratio < source_ratio:
+            crop_height = min(height, round(width / source_ratio))
+            top = max(0, (height - crop_height) // 2)
+            image = image.crop((0, top, width, top + crop_height))
+        else:
+            crop_width = min(width, round(height * source_ratio))
+            left = max(0, (width - crop_width) // 2)
+            image = image.crop((left, 0, left + crop_width, height))
+        buffer = BytesIO()
+        image.save(buffer, format="PNG", optimize=True)
+        return base64.b64encode(buffer.getvalue()).decode("ascii")
+    except Exception:
+        return encoded_png
 
 
 def _eye_age(module: dict[str, Any], result: dict[str, Any], chronological_age: float | None) -> dict[str, Any]:
@@ -192,6 +219,8 @@ def _cardiovascular(
         (item["image"] for item in octa_result.get("auxiliary_images", []) if item.get("label") == "血管概率图"),
         octa_result["result_image"],
     )
+    cfp_overlay = _crop_model_canvas(cfp_result["overlay_png"], cfp_path)
+    cfp_vessels = _crop_model_canvas(cfp_result["vessels_png"], cfp_path)
     return {
         "summary": f"冠心病相关视网膜风险信号：{assessment['risk_label']}",
         "status_label": "联合评估完成",
@@ -208,12 +237,12 @@ def _cardiovascular(
             {"title": "建议检查", "text": "；".join(assessment["recommended_checks"])},
         ],
         "quality": _quality(cfp_result.get("quality", {})),
-        "result_image": f"data:image/png;base64,{cfp_result['overlay_png']}",
+        "result_image": f"data:image/png;base64,{cfp_overlay}",
         "views": [
-            {"label": "彩照血管分析", "image": f"data:image/png;base64,{cfp_result['overlay_png']}"},
+            {"label": "彩照血管分析", "image": f"data:image/png;base64,{cfp_overlay}"},
             {"label": "OCTA 微血管", "image": octa_result["result_image"]},
             {"label": "OCTA 概率图", "image": octa_probability},
-            {"label": "彩照血管分割", "image": f"data:image/png;base64,{cfp_result['vessels_png']}"},
+            {"label": "彩照血管分割", "image": f"data:image/png;base64,{cfp_vessels}"},
         ],
         "coronary_assessment": assessment,
         "trace": assessment["trace"],

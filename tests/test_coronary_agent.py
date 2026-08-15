@@ -1,8 +1,13 @@
+import base64
+from io import BytesIO
 from pathlib import Path
+
+from PIL import Image
 
 from fastapi.testclient import TestClient
 
 from api import coronary_agent
+from api.systemic import _crop_model_canvas
 from api.main import app
 
 
@@ -88,3 +93,20 @@ def test_cardiovascular_config_exposes_both_samples():
     )
     assert module["sample_url"]
     assert "modality=octa" in module["sample_octa_url"]
+
+
+def test_cardiovascular_result_removes_square_model_letterbox(tmp_path):
+    source_path = tmp_path / "source.png"
+    Image.new("RGB", (1500, 1000), (30, 20, 10)).save(source_path)
+
+    canvas = Image.new("RGB", (1024, 1024), (0, 0, 0))
+    canvas.paste(Image.new("RGB", (1024, 683), (120, 30, 20)), (0, 170))
+    encoded = BytesIO()
+    canvas.save(encoded, format="PNG")
+
+    cropped = _crop_model_canvas(
+        base64.b64encode(encoded.getvalue()).decode("ascii"), source_path
+    )
+    result = Image.open(BytesIO(base64.b64decode(cropped)))
+
+    assert result.size == (1024, 683)
