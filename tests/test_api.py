@@ -143,12 +143,10 @@ def test_amd_config_declares_dual_specialist_runtime():
     assert len(body["required_images"]) == 6
     case = body["default_case"]
     assert case["case_id"] == "CASE_001"
-    assert case["evidence_origin"] == "locally_recomputed_longitudinal_images"
-    assert case["patient"]["age"] == 60
+    assert case["evidence_origin"] == "reported_reference"
     assert case["visits"][0]["bcva_decimal"] == 0.3
     assert case["visits"][1]["bcva_decimal"] == 0.5
-    assert case["image_quality"]["status"] == "passed"
-    assert "reference_biomarkers" not in case
+    assert case["image_quality"]["status"] == "review"
 
 
 def test_custom_amd_case_fields_are_normalized_for_inference():

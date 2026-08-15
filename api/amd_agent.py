@@ -53,19 +53,26 @@ DEFAULT_IMAGES = {
 }
 DEFAULT_CASE = {
     "case_id": "CASE_001",
-    "title": "纵向 nAMD 多模态随访",
+    "title": "内置示例：纵向 nAMD 随访病例",
     "research_demo": True,
-    "evidence_origin": "locally_recomputed_longitudinal_images",
-    "patient": {"age": 60, "sex": "女", "eye": "右眼", "diagnosis": "新生血管性 AMD（影像随访）"},
-    "treatment": {"agent": "治疗方案未提供，可在分析前补充", "injections": 0, "current_interval_weeks": "未记录"},
+    "evidence_origin": "reported_reference",
+    "patient": {"age": 78, "sex": "女", "eye": "右眼", "diagnosis": "新生血管性 AMD（既往诊断）"},
+    "treatment": {"agent": "玻璃体腔抗 VEGF（具体药物未记录）", "injections": 5, "current_interval_weeks": "未记录"},
     "visits": [
         {"id":"V0","label":"基线","date":"2024-03","bcva_decimal":0.3,
          "images":{"oct":"/research-samples/amd-v0-oct","octa":"/research-samples/amd-v0-octa","fundus":"/research-samples/amd-v0-fundus"}},
-        {"id":"V1","label":"随访","date":"2025-03","bcva_decimal":0.5,
+        {"id":"V1","label":"随访","date":"2024-06","bcva_decimal":0.5,
          "images":{"oct":"/research-samples/amd-v1-oct","octa":"/research-samples/amd-v1-octa","fundus":"/research-samples/amd-v1-fundus"}},
     ],
-    "context": "60 岁女性右眼 nAMD 多模态影像随访；基线与约一年后均提供超广角彩照、OCTA 和 OCT，视力与治疗记录可在分析前补充。",
-    "image_quality": {"source":"longitudinal_multimodal_images","native_pixels":[335,351],"status":"passed","reason":"六张影像均达到分析分辨率；超广角彩照身份文字已遮蔽。"}
+    "context": "病例记录：78 岁女性右眼 nAMD，接受 5 次抗 VEGF 注射；2024-03 至 2024-06 视力与多模态影像标志物总体改善。",
+    "reference_biomarkers": {
+        "provenance":"paper_reported_not_locally_recomputed",
+        "oct":{"candidate_lesion_area_mm2":[2.38,1.28],"maximum_lesion_height_um":[413.4,354.9]},
+        "fundus":{"candidate_lesion_area_mm2":[8.58,6.58],"followup_relative_to_baseline_percent":76.7},
+        "octa":{"cnv_candidate_area_mm2":[1.39,0.08],"followup_relative_to_baseline_percent":5.7},
+        "bcva_decimal":[0.3,0.5]
+    },
+    "image_quality": {"source":"paper_figure_crop","native_pixels":[93,99],"display_pixels":[564,594],"status":"review","reason":"当前示例影像分辨率有限，仅用于系统功能演示；不等同于原始 DICOM/OCT 体数据。"}
 }
 
 EVIDENCE_SUMMARIES_ZH = {

@@ -77,11 +77,11 @@ SAMPLES = {
 AMD_SAMPLES = {
     f"amd-{visit}-{modality}": {
         "path": RUNTIME / f"amd_{visit}_{modality}.png",
-        "title": f"AMD 纵向随访 · {visit.upper()} · {modality.upper()}",
-        "source": "user-provided longitudinal multimodal case",
-        "license": "private academic research",
-        "reference_type": "locally recomputed longitudinal image",
-        "native_resolution": [335, 351],
+        "title": f"AMD CASE_001 · {visit.upper()} · {modality.upper()}",
+        "source": "AMDFollowup paper Figure 3",
+        "license": "paper figure excerpt for private research review",
+        "reference_type": "de-identified figure thumbnail",
+        "native_resolution": [93, 99],
     }
     for visit in ("v0", "v1") for modality in ("oct", "octa", "fundus")
 }
