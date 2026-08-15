@@ -75,8 +75,8 @@ const DELTA_METRICS = [
   ['octa_vessel_density_points','OCTA 血管密度',' 个百分点'],
   ['octa_skeleton_length_percent','OCTA 血管骨架','%'],
   ['octa_central_avascular_area_percent','中央无血管候选区','%'],
-  ['fundus_lesion_ratio_points','彩照病灶占比',' 个百分点'],
-  ['fundus_hemorrhage_area_percent','彩照出血面积','%'],
+  ['octa_cnv_candidate_area_percent','OCTA CNV 候选面积','%'],
+  ['fundus_amd_candidate_area_percent','彩照 AMD 候选面积','%'],
   ['amd_probability_points','AMD 筛查概率',' 个百分点'],
   ['fundus_large_drusen_probability_points','彩照玻璃膜疣概率',' 个百分点'],
   ['fundus_pigment_probability_points','彩照色素异常概率',' 个百分点'],
@@ -469,11 +469,11 @@ function AgentResult({ result, onReset }) {
             {Object.entries(visitTools).map(([visit,data]) => {
               const tiles = [
                 ['OCT 层结构',data.oct.structure_overlay || data.oct.overlay],
-                ['OCT 液体总量',data.oct.fluid_overlay],
-                ['OCT 三类液体',data.oct.fluid_subtype_overlay],
-                ['OCT AMD 病灶',data.oct.pathology_overlay],
-                ['OCTA 血管',data.octa.overlay],
-                ['彩照病灶',data.fundus.lesion_overlay || data.fundus.overlay],
+                ['OCT 三类液体分割',data.oct.fluid_subtype_overlay],
+                ['OCT AMD 关注区',data.oct.pathology_overlay],
+                ['OCTA CNV 定位',data.octa.cnv_overlay || data.octa.overlay],
+                ['OCTA 微血管分割',data.octa.vessel_overlay || data.octa.overlay],
+                ['彩照 AMD 病灶定位',data.fundus.amd_overlay || data.fundus.overlay],
               ];
               const fluidFindings = [
                 ['irf','视网膜内液'], ['srf','视网膜下液'], ['ped','色素上皮脱离'],
@@ -490,8 +490,8 @@ function AgentResult({ result, onReset }) {
                 ['血管骨架',data.octa.skeleton_length_px,'px'],
                 ['分支点',data.octa.branch_points,'个'],
                 ['中央无血管候选区',data.octa.central_avascular_area_px2,'px²'],
-                ['彩照病灶占比',data.fundus.lesion_ratio_percent,'%'],
-                ['彩照出血面积',data.fundus.hemorrhage_area_px,'px'],
+                ['OCTA CNV 候选面积',data.octa.cnv_candidate_area_px,'px²'],
+                ['彩照 AMD 候选面积',data.fundus.amd_candidate_area_px,'px'],
               ];
               return <article className="visit-segmentation" key={visit}>
                 <header><span>{visit === 'baseline' ? 'V0' : 'V1'}</span><div><strong>{VISIT_LABELS[visit]}</strong><small>{visit === 'baseline' ? '治疗前基线' : '治疗后随访'}</small></div></header>

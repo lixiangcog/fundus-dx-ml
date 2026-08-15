@@ -226,7 +226,32 @@ def vascular_quantification(image: Image.Image, image_path=None, reference=None,
         truth=np.asarray(Image.open(reference["reference_path"]).convert("L").resize((1216,1216),Image.Resampling.NEAREST))>0; scored=_binary_metrics(mask,truth); metrics[:0]=[_metric("配对 Dice",round(scored["dice"],4)),_metric("配对 IoU",round(scored["iou"],4))]; quality=_quality("passed" if scored["dice"]>=.80 else "failed","配对集成参考通过" if scored["dice"]>=.80 else "配对集成参考未通过","上游生成图/血管图配对；非独立临床测试",scored,"paired Dice ≥ 0.80",reference)
     else: quality=_quality("unverified","无真值上传","仅模型输出形态学",{},"不作准确度结论",None)
     base=cv2.cvtColor(cv2.resize(_gray(image,1216),(1216,1216)),cv2.COLOR_GRAY2RGB); color=base.copy(); color[mask>0]=(0,236,255); color[candidate]=(255,55,186); overlay=cv2.addWeighted(base,.5,color,.55,0); contours,_=cv2.findContours(candidate.astype(np.uint8),cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE); cv2.drawContours(overlay,contours,-1,(255,210,0),3)
-    return {"summary":"深度血管分割、微血管形态与中央无血管候选量化完成","result_image":_png_data_url(overlay),"auxiliary_images":[{"label":"血管概率图","image":"data:image/png;base64,"+raw["probability_png"]}],"metrics":metrics,"quality":quality,"candidate_regions":{"central_avascular_core":candidate_metrics},"runtime_ms":raw["runtime_ms"],"notice":"默认血管配对用于集成回归，不代表临床泛化；中央候选区是未独立验证的几何派生结果，不能作为 FAZ 临床测量。"}
+    metrics.extend([
+        _metric("CNV 候选面积", raw.get("cnv_candidate_pixels", 0), "px²"),
+        _metric("CNV 候选占比", raw.get("cnv_candidate_ratio_percent", 0), "%"),
+        _metric("CNV 候选区域", raw.get("cnv_candidate_components", 0), "个"),
+    ])
+    return {
+        "summary":"深度血管分割、微血管形态与中央无血管候选量化完成",
+        "result_image":_png_data_url(overlay),
+        "cnv_result_image":"data:image/png;base64,"+raw["cnv_overlay_png"],
+        "auxiliary_images":[
+            {"label":"血管概率图","image":"data:image/png;base64,"+raw["probability_png"]},
+            {"label":"CNV 候选概率图","image":"data:image/png;base64,"+raw["cnv_probability_png"]},
+        ],
+        "metrics":metrics,
+        "quality":quality,
+        "candidate_regions":{
+            "central_avascular_core":candidate_metrics,
+            "cnv":{
+                "area_pixels":raw.get("cnv_candidate_pixels",0),
+                "ratio_percent":raw.get("cnv_candidate_ratio_percent",0),
+                "components":raw.get("cnv_candidate_components",0),
+            },
+        },
+        "runtime_ms":raw["runtime_ms"],
+        "notice":"OCTA CNV 为血管分割与中心异常血流密度联合得到的候选区，需结合结构 OCT 复核。",
+    }
 
 
 def _fit_truth(mask: np.ndarray, transform: dict) -> np.ndarray:
@@ -305,10 +330,12 @@ def oct_fluid_subtype_quantification(image: Image.Image, image_path=None, **_) -
         "result_image": "data:image/png;base64," + raw["overlay_png"],
         "subtypes": subtypes,
         "mean_confidence": raw.get("mean_confidence"),
+        "ensemble_agreement_dice": raw.get("ensemble_agreement_dice"),
         "metrics": metrics,
         "quality": _quality(
             "review", "跨来源测试泛化有限", "四来源 503 张独立测试切片",
             {"mean_fluid_dice":0.2739, "irf_dice":0.2043, "srf_dice":0.1712, "ped_dice":0.4463,
+             "ensemble_agreement_dice":raw.get("ensemble_agreement_dice"),
              "checkpoint_revision":"e17b3888c267d7d7e56dc35096cf72a0ca85a422"},
             "作为补充病灶头；液体总负荷仍使用已校准模型", None,
         ),
@@ -323,9 +350,20 @@ def fundus_amd_pathology(image: Image.Image, image_path=None, **_) -> dict:
         _metric(item["label"], round(float(item["positive_probability"]) * 100, 2), "%", item["status"])
         for item in findings
     ]
+    metrics.extend([
+        _metric("AMD 候选面积", raw.get("candidate_pixels", 0), "px"),
+        _metric("AMD 候选占比", raw.get("candidate_ratio_percent", 0), "%"),
+        _metric("AMD 候选区域", raw.get("candidate_components", 0), "个"),
+    ])
     return {
-        "summary": "眼底彩照 AMD 表征筛查完成",
+        "summary": "眼底彩照 AMD 表征筛查与定位完成",
+        "result_image": "data:image/png;base64," + raw["overlay_png"],
         "findings": findings,
+        "candidate": {
+            "area_pixels": raw.get("candidate_pixels", 0),
+            "ratio_percent": raw.get("candidate_ratio_percent", 0),
+            "components": raw.get("candidate_components", 0),
+        },
         "metrics": metrics,
         "quality": _quality(
             "unverified", "公开权重已完成格式与数值校验", "AREDS 彩照风险因子模型；当前病例无配对真值",

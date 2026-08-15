@@ -151,7 +151,7 @@
 }
 
 .segmentation-gallery figure {
-  height: 176px;
+  height: 210px;
   margin: 0;
   border: 1px solid rgba(8, 229, 237, .12);
   background: #02080a;
@@ -418,7 +418,7 @@
 .procedure-checklists li svg { flex: none; color: var(--cyan); margin-top: 1px; }
 
 @media (max-width: 1450px) {
-  .segmentation-gallery figure { height: 150px; }
+  .segmentation-gallery figure { height: 180px; }
   .procedure-overview { grid-template-columns: 90px 1.25fr 1fr 1fr; }
   .procedure-overview article { padding: 9px; }
 }

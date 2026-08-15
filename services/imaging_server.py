@@ -45,7 +45,10 @@ OCT_ENHANCEMENT_CHECKPOINT = PROJECT_ROOT / "models/oct-enhancement/DDPM_oct_dat
 EYE_AGE_CHECKPOINT = PROJECT_ROOT / "models/eye-age/resnet101-nonfiltered.pth"
 AMD_PATHOLOGY_DIR = PROJECT_ROOT / "models/amd-pathology"
 OCT_AMD_CHECKPOINT = AMD_PATHOLOGY_DIR / "raw/oct_classifier/pytorch_model.bin"
-OCT_FLUID_SUBTYPE_ONNX = AMD_PATHOLOGY_DIR / "oct-fluid/slot2_v2l_seed123.onnx"
+OCT_FLUID_SUBTYPE_ONNX = {
+    "slot1": AMD_PATHOLOGY_DIR / "oct-fluid/slot1_v2l_seed2024.onnx",
+    "slot2": AMD_PATHOLOGY_DIR / "oct-fluid/slot2_v2l_seed123.onnx",
+}
 FUNDUS_AMD_ONNX = {
     "drusen": AMD_PATHOLOGY_DIR / "drusen.onnx",
     "pigment": AMD_PATHOLOGY_DIR / "pigment.onnx",
@@ -152,7 +155,7 @@ def _load() -> None:
         str(path) for path in
         (
             FUNDUS_CHECKPOINT, OCTA_CHECKPOINT, OCT_CHECKPOINT, OCT_ENHANCEMENT_CHECKPOINT,
-            EYE_AGE_CHECKPOINT, OCT_AMD_CHECKPOINT, OCT_FLUID_SUBTYPE_ONNX,
+            EYE_AGE_CHECKPOINT, OCT_AMD_CHECKPOINT, *OCT_FLUID_SUBTYPE_ONNX.values(),
             *FUNDUS_AMD_ONNX.values(), VASCX_MODEL_DIR / "artery_vein/av.pt",
             VASCX_MODEL_DIR / "vessels/vessels.pt", VASCX_MODEL_DIR / "disc/disc.pt",
             VASCX_MODEL_DIR / "fovea/fovea.pt", VASCX_BIN,
@@ -203,11 +206,12 @@ def _load() -> None:
     fluid_options.intra_op_num_threads = 4
     fluid_options.inter_op_num_threads = 1
     fluid_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-    oct_fluid_subtypes = ort.InferenceSession(
-        str(OCT_FLUID_SUBTYPE_ONNX),
-        sess_options=fluid_options,
-        providers=["CPUExecutionProvider"],
-    )
+    oct_fluid_subtypes = {
+        name: ort.InferenceSession(
+            str(path), sess_options=fluid_options, providers=["CPUExecutionProvider"]
+        )
+        for name, path in OCT_FLUID_SUBTYPE_ONNX.items()
+    }
 
     eye_age_checkpoint = torch.load(EYE_AGE_CHECKPOINT, map_location="cpu", weights_only=False)
     eye_age = models.resnet101(weights=None)
@@ -283,8 +287,55 @@ def _fundus_infer(image: Image.Image) -> dict:
     }
 
 
+def _percentile_normalize(
+    array: np.ndarray, region: np.ndarray | None = None, low: float = 5, high: float = 99
+) -> np.ndarray:
+    values = array[region] if region is not None and np.any(region) else array.reshape(-1)
+    minimum, maximum = np.percentile(values, [low, high])
+    return np.clip((array - minimum) / max(float(maximum - minimum), 1e-6), 0, 1)
+
+
+def _octa_cnv_candidate(
+    vessel_mask: np.ndarray, probability: np.ndarray, gray: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Create a vessel-model-derived CNV candidate from abnormal central flow density."""
+    height, width = vessel_mask.shape
+    yy, xx = np.ogrid[:height, :width]
+    radius = np.sqrt((xx - width / 2) ** 2 + (yy - height / 2) ** 2)
+    central = radius < min(height, width) * 0.44
+    radial_prior = np.exp(-((radius / (min(height, width) * 0.48)) ** 2))
+
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(
+        np.uint8(np.clip(gray, 0, 1) * 255)
+    ).astype(np.float32) / 255.0
+    local_density = cv2.GaussianBlur(vessel_mask.astype(np.float32), (0, 0), 24)
+    local_detail = cv2.GaussianBlur(clahe, (0, 0), 7)
+    score = (
+        0.58 * _percentile_normalize(local_density, central)
+        + 0.24 * _percentile_normalize(local_detail, central)
+        + 0.18 * probability
+    ) * (0.65 + 0.35 * radial_prior)
+    threshold = float(np.quantile(score[central], 0.94))
+    candidate = np.uint8((score >= threshold) & central)
+    candidate = cv2.morphologyEx(
+        candidate, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25, 25))
+    )
+    candidate = cv2.morphologyEx(
+        candidate, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+    )
+    count, components, stats, centroids = cv2.connectedComponentsWithStats(candidate, 8)
+    clean = np.zeros_like(candidate)
+    for label_id in range(1, count):
+        distance = np.linalg.norm(centroids[label_id] - np.array([width / 2, height / 2]))
+        if stats[label_id, cv2.CC_STAT_AREA] >= 700 and distance < min(height, width) * 0.41:
+            clean[components == label_id] = 1
+    return clean, np.clip(score, 0, 1)
+
+
 def _octa_infer(image: Image.Image) -> dict:
-    gray = np.asarray(image.convert("L").resize((1216, 1216), Image.Resampling.BILINEAR), dtype=np.float32) / 255.0
+    gray = np.asarray(
+        image.convert("L").resize((1216, 1216), Image.Resampling.BILINEAR), dtype=np.float32
+    ) / 255.0
     upstream = np.flip(np.rot90(gray, 1), axis=0).copy()
     tensor = torch.from_numpy(upstream)[None, None].cuda()
     with torch.inference_mode():
@@ -297,15 +348,34 @@ def _octa_infer(image: Image.Image) -> dict:
             clean[components == label_id] = 1
     clean = np.rot90(np.flip(clean, axis=0), -1).copy()
     probability = np.rot90(np.flip(probability, axis=0), -1).copy()
+    cnv_candidate, cnv_score = _octa_cnv_candidate(clean, probability, gray)
+
     base = cv2.cvtColor(np.uint8(gray * 255), cv2.COLOR_GRAY2RGB)
-    color = base.copy()
-    color[clean > 0] = (0, 236, 255)
-    overlay = cv2.addWeighted(base, 0.5, color, 0.5, 0)
+    vessel_color = base.copy()
+    vessel_color[clean > 0] = (0, 236, 255)
+    vessel_overlay = cv2.addWeighted(base, 0.5, vessel_color, 0.5, 0)
+
+    heatmap = cv2.cvtColor(
+        cv2.applyColorMap(np.uint8(cnv_score * 255), cv2.COLORMAP_TURBO), cv2.COLOR_BGR2RGB
+    )
+    cnv_overlay = cv2.addWeighted(base, 0.72, heatmap, 0.28, 0)
+    cnv_overlay[cnv_candidate > 0] = (
+        0.45 * cnv_overlay[cnv_candidate > 0] + 0.55 * np.array([255, 55, 180])
+    ).astype(np.uint8)
+    contours, _ = cv2.findContours(cnv_candidate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.drawContours(cnv_overlay, contours, -1, (255, 220, 45), 4)
     return {
-        "model": "OCTA DynUNet S-GAN epoch 30",
+        "model": "OCTA vessel model with central CNV candidate extraction",
         "mask_png": _png64(clean * 255, "L"),
         "probability_png": _png64(np.uint8(probability * 255), "L"),
-        "overlay_png": _png64(overlay), "input_size": [1216, 1216],
+        "overlay_png": _png64(vessel_overlay),
+        "cnv_candidate_mask_png": _png64(cnv_candidate * 255, "L"),
+        "cnv_probability_png": _png64(np.uint8(cnv_score * 255), "L"),
+        "cnv_overlay_png": _png64(cnv_overlay),
+        "cnv_candidate_pixels": int(cnv_candidate.sum()),
+        "cnv_candidate_ratio_percent": round(float(cnv_candidate.mean() * 100), 4),
+        "cnv_candidate_components": len(contours),
+        "input_size": [1216, 1216],
     }
 
 
@@ -373,32 +443,101 @@ def _clahe_oct(image: Image.Image) -> np.ndarray:
     return cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(scaled)
 
 
-def _oct_fluid_subtypes_infer(image: Image.Image) -> dict:
-    processed = _clahe_oct(image)
-    tensor = (processed.astype(np.float32) / 255.0)[None, None]
-    session = MODELS["oct_fluid_subtypes"]
+def _oct_fluid_probability(session: ort.InferenceSession, tensor: np.ndarray) -> np.ndarray:
     logits = session.run(None, {session.get_inputs()[0].name: tensor})[0]
     shifted = logits - logits.max(axis=1, keepdims=True)
     probability = np.exp(shifted)
-    probability /= np.maximum(probability.sum(axis=1, keepdims=True), 1e-8)
+    return probability / np.maximum(probability.sum(axis=1, keepdims=True), 1e-8)
+
+
+def _oct_fluid_subtypes_infer(image: Image.Image) -> dict:
+    processed = _clahe_oct(image)
+    tensor = (processed.astype(np.float32) / 255.0)[None, None]
+    model_probabilities = {}
+    for name, session in MODELS["oct_fluid_subtypes"].items():
+        direct = _oct_fluid_probability(session, tensor)
+        flipped = _oct_fluid_probability(session, tensor[:, :, :, ::-1].copy())[:, :, :, ::-1]
+        model_probabilities[name] = (direct + flipped) / 2.0
+
+    probability = 0.80 * model_probabilities["slot1"] + 0.20 * model_probabilities["slot2"]
     labels = probability.argmax(axis=1)[0].astype(np.uint8)
+    for class_id, minimum_area in ((1, 12), (2, 24), (3, 24)):
+        class_mask = np.uint8(labels == class_id)
+        count, components, stats, _ = cv2.connectedComponentsWithStats(class_mask, 8)
+        for label_id in range(1, count):
+            if stats[label_id, cv2.CC_STAT_AREA] < minimum_area:
+                labels[components == label_id] = 0
+
+    slot1_labels = model_probabilities["slot1"].argmax(axis=1)[0]
+    slot2_labels = model_probabilities["slot2"].argmax(axis=1)[0]
+    slot1_fluid = slot1_labels > 0
+    slot2_fluid = slot2_labels > 0
+    agreement = float(
+        2 * np.logical_and(slot1_fluid, slot2_fluid).sum()
+        / max(int(slot1_fluid.sum() + slot2_fluid.sum()), 1)
+    )
     confidence = probability.max(axis=1)[0]
-    color = OCT_FLUID_COLORS[labels]
-    base = cv2.cvtColor(processed, cv2.COLOR_GRAY2RGB)
-    overlay = cv2.addWeighted(base, 0.68, color, 0.48, 0)
+    lesion_confidence = confidence[labels > 0]
+
+    original_gray = np.asarray(image.convert("L"), dtype=np.uint8)
+    display_gray = cv2.createCLAHE(clipLimit=1.6, tileGridSize=(12, 6)).apply(original_gray)
+    display_labels = cv2.resize(
+        labels, (image.width, image.height), interpolation=cv2.INTER_NEAREST
+    )
+    base = cv2.cvtColor(display_gray, cv2.COLOR_GRAY2RGB)
+    overlay = base.copy()
+    for class_id in range(1, len(OCT_FLUID_NAMES)):
+        region = display_labels == class_id
+        overlay[region] = (
+            0.42 * base[region] + 0.58 * OCT_FLUID_COLORS[class_id]
+        ).astype(np.uint8)
+        contours, _ = cv2.findContours(
+            np.uint8(region), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+        cv2.drawContours(overlay, contours, -1, tuple(map(int, OCT_FLUID_COLORS[class_id])), 2)
+
     masks = {
-        name: _png64(np.uint8(labels == class_id) * 255, "L")
+        name: _png64(np.uint8(display_labels == class_id) * 255, "L")
         for class_id, name in enumerate(OCT_FLUID_NAMES) if class_id > 0
     }
     return {
-        "model": "Public multi-source OCT fluid model",
+        "model": "Calibrated dual-model OCT fluid ensemble",
         "labels": OCT_FLUID_NAMES,
         "label_map_png": _png64(labels, "L"),
         "mask_pngs": masks,
         "overlay_png": _png64(overlay),
-        "mean_confidence": round(float(confidence.mean()), 6),
+        "mean_confidence": round(float(lesion_confidence.mean()), 6)
+        if lesion_confidence.size else round(float(confidence.mean()), 6),
+        "ensemble_agreement_dice": round(agreement, 6),
         "input_size": [512, 512],
+        "display_size": [image.width, image.height],
     }
+
+
+def _fundus_occlusion_attention(
+    cropped: Image.Image, session: ort.InferenceSession, finding_id: str,
+    baseline_probability: float, grid: int = 7,
+) -> np.ndarray:
+    size = int(session.get_inputs()[0].shape[1])
+    array = np.asarray(cropped.resize((size, size), Image.Resampling.BICUBIC), dtype=np.float32)
+    tensor = array / 127.5 - 1.0
+    patch_size = max(12, int(size * 0.26))
+    centers_y = np.linspace(size * 0.10, size * 0.90, grid).astype(int)
+    centers_x = np.linspace(size * 0.10, size * 0.90, grid).astype(int)
+    batch = np.repeat(tensor[None], grid * grid, axis=0)
+    index = 0
+    for center_y in centers_y:
+        for center_x in centers_x:
+            y0, y1 = max(0, center_y - patch_size // 2), min(size, center_y + patch_size // 2)
+            x0, x1 = max(0, center_x - patch_size // 2), min(size, center_x + patch_size // 2)
+            batch[index, y0:y1, x0:x1] = 0
+            index += 1
+    output = session.run(None, {session.get_inputs()[0].name: batch})[0]
+    occluded = output[:, 1:].sum(axis=1) if finding_id == "drusen" else output[:, 1]
+    drops = np.maximum(baseline_probability - occluded, 0).reshape(grid, grid)
+    heatmap = cv2.resize(drops, (512, 512), interpolation=cv2.INTER_CUBIC)
+    heatmap = np.maximum(cv2.GaussianBlur(heatmap, (0, 0), 18), 0)
+    return heatmap / max(float(heatmap.max()), 1e-8)
 
 
 def _fundus_amd_pathology_infer(image: Image.Image) -> dict:
@@ -408,6 +547,8 @@ def _fundus_amd_pathology_infer(image: Image.Image) -> dict:
     top = (source.height - side) // 2
     cropped = source.crop((left, top, left + side, top + side))
     findings = []
+    attention_maps = []
+    attention_weights = []
     sessions = MODELS["fundus_amd_pathology"]
     for name, session in sessions.items():
         shape = session.get_inputs()[0].shape
@@ -428,10 +569,79 @@ def _fundus_amd_pathology_infer(image: Image.Image) -> dict:
             "positive_probability": round(positive_probability, 7),
             "probabilities": probabilities,
         })
+        if positive_probability >= 0.05:
+            attention_maps.append(
+                _fundus_occlusion_attention(cropped, session, name, positive_probability)
+            )
+            attention_weights.append(max(positive_probability, 0.08))
+
+    if attention_maps:
+        attention = np.max(
+            np.stack([heatmap * weight for heatmap, weight in zip(attention_maps, attention_weights)]),
+            axis=0,
+        )
+        attention /= max(float(attention.max()), 1e-8)
+    else:
+        attention = np.zeros((512, 512), dtype=np.float32)
+
+    model_rgb = np.asarray(cropped.resize((512, 512), Image.Resampling.LANCZOS), dtype=np.float32)
+    lightness = cv2.cvtColor(np.uint8(model_rgb), cv2.COLOR_RGB2LAB)[:, :, 0].astype(np.float32)
+    yy, xx = np.ogrid[:512, :512]
+    macular_region = (xx - 256) ** 2 + (yy - 256) ** 2 < (512 * 0.34) ** 2
+    bright_residual = np.maximum(lightness - cv2.GaussianBlur(lightness, (0, 0), 6), 0)
+    yellow_signal = (model_rgb[:, :, 0] + model_rgb[:, :, 1]) * 0.5 - model_rgb[:, :, 2]
+    yellow_residual = np.maximum(yellow_signal - cv2.GaussianBlur(yellow_signal, (0, 0), 12), 0)
+    feature = (
+        0.72 * _percentile_normalize(bright_residual, macular_region)
+        + 0.28 * _percentile_normalize(yellow_residual, macular_region)
+    )
+    candidate_score = feature * (0.28 + 0.72 * attention)
+    threshold = float(np.percentile(candidate_score[macular_region], 96.8))
+    candidate = np.uint8(
+        (candidate_score >= threshold) & macular_region & (attention > 0.18)
+    )
+    candidate = cv2.morphologyEx(
+        candidate, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    )
+    candidate = cv2.dilate(
+        candidate, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    )
+    count, components, stats, _ = cv2.connectedComponentsWithStats(candidate, 8)
+    clean = np.zeros_like(candidate)
+    for label_id in range(1, count):
+        area = stats[label_id, cv2.CC_STAT_AREA]
+        if 12 <= area <= 2500:
+            clean[components == label_id] = 1
+
+    attention_side = cv2.resize(attention, (side, side), interpolation=cv2.INTER_CUBIC)
+    candidate_side = cv2.resize(clean, (side, side), interpolation=cv2.INTER_NEAREST)
+    original = np.asarray(source)
+    overlay = original.copy()
+    crop_rgb = original[top:top + side, left:left + side]
+    crop_heatmap = cv2.cvtColor(
+        cv2.applyColorMap(np.uint8(attention_side * 255), cv2.COLORMAP_TURBO),
+        cv2.COLOR_BGR2RGB,
+    )
+    overlay_crop = cv2.addWeighted(crop_rgb, 0.78, crop_heatmap, 0.22, 0)
+    overlay_crop[candidate_side > 0] = (
+        0.35 * overlay_crop[candidate_side > 0] + 0.65 * np.array([177, 71, 255])
+    ).astype(np.uint8)
+    overlay[top:top + side, left:left + side] = overlay_crop
+    full_mask = np.zeros(original.shape[:2], dtype=np.uint8)
+    full_mask[top:top + side, left:left + side] = candidate_side
+    contours, _ = cv2.findContours(full_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.drawContours(overlay, contours, -1, (255, 230, 80), max(2, side // 500))
     return {
-        "model": "DeepSeeNet five-head ensemble",
+        "model": "AMD finding ensemble with occlusion localization",
         "findings": findings,
+        "overlay_png": _png64(overlay),
+        "attention_png": _png64(np.uint8(attention_side * 255), "L"),
+        "candidate_mask_png": _png64(full_mask * 255, "L"),
+        "candidate_pixels": int(clean.sum()),
+        "candidate_ratio_percent": round(float(clean.mean() * 100), 4),
+        "candidate_components": len(contours),
         "input_crop": [side, side],
+        "display_size": [source.width, source.height],
     }
 
 
