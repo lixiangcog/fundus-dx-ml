@@ -58,6 +58,7 @@ function App() {
   const active = capabilities.find((item) => item.id === activeId) || capabilities[0];
 
   useEffect(() => {
+    fetch(`${API_URL}/compute/ensure`, { method:'POST' }).catch(() => null);
     Promise.all([fetch(`${API_URL}/capabilities`).then((r) => r.json()), fetch(`${API_URL}/health`).then((r) => r.json())])
       .then(([catalog, health]) => {
         setCapabilities(catalog.capabilities); setService(health.status === 'ok' ? 'online' : 'degraded');

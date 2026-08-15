@@ -31,6 +31,8 @@ export OMP_NUM_THREADS=4
 
 cd "${PROJECT_ROOT}"
 mkdir -p logs runtime
+bash scripts/queue_successor.sh retina-gpu "${SLURM_JOB_ID}" "${PROJECT_ROOT}/slurm/retina-gpu-stack.sbatch" || \
+  echo "Unable to queue the next GPU stack job; the web watchdog remains active." >&2
 
 declare -a service_pids=()
 declare -a service_names=()

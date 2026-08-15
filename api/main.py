@@ -25,6 +25,7 @@ from api.amd_agent import DEFAULT_CASE, public_status as amd_agent_status
 from api.amd_agent import run_case as run_amd_case, run_default_case as run_default_amd_case
 from api.systemic import SYSTEMIC_MODULES, public_config as systemic_public_config
 from api.systemic import run_module as run_systemic_module, sample_path as systemic_sample_path
+from api.gpu_scheduler import ensure_gpu_stack, gpu_job_status
 
 APP_VERSION = "5.0.0"
 MAX_UPLOAD_BYTES = 12 * 1024 * 1024
@@ -130,7 +131,17 @@ def _normalize_amd_case(payload: object) -> dict:
 async def health():
     return {"status": "ok", "model_loaded": model is not None, "device": str(device),
             "version": APP_VERSION, "pipelines_ready": len(PIPELINES),
-            "imaging_service": imaging_status()}
+            "imaging_service": imaging_status(), "gpu_job": gpu_job_status()}
+
+
+@app.get("/compute/status")
+async def compute_status():
+    return gpu_job_status()
+
+
+@app.post("/compute/ensure")
+async def compute_ensure():
+    return await asyncio.to_thread(ensure_gpu_stack)
 
 
 @app.get("/capabilities")

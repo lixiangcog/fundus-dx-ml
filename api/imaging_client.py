@@ -41,6 +41,10 @@ def status() -> dict[str, Any]:
 def infer(task: str, image_path: Path) -> dict[str, Any]:
     service = status()
     if service.get("status") != "ready":
+        from api.gpu_scheduler import wait_for_service
+
+        service = wait_for_service(status, "影像分析")
+    if service.get("status") != "ready":
         raise RuntimeError(service.get("detail") or "Imaging GPU service is not ready")
     if not TOKEN_FILE.is_file():
         raise RuntimeError("Internal imaging service token is missing")

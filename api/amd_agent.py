@@ -158,6 +158,10 @@ def _gpu_infer(
 ) -> dict[str, Any]:
     status = _service_status(status_file)
     if status.get("status") != "ready":
+        from api.gpu_scheduler import wait_for_service
+
+        status = wait_for_service(lambda: _service_status(status_file), service_name)
+    if status.get("status") != "ready":
         raise RuntimeError(status.get("detail") or f"{service_name} GPU service is not ready")
     body = json.dumps({
         "prompt": prompt,
