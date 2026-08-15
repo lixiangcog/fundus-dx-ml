@@ -172,7 +172,7 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
       </header>
       <div className="systemic-grid">
         <section className="systemic-input">
-          <div className="systemic-panel-head"><span><FileImage size={14}/>输入彩照</span><small>默认样例可直接运行</small></div>
+          <div className="systemic-panel-head"><span><FileImage size={14}/>{moduleId === 'cardiovascular-retina' ? '输入彩照与 OCTA' : '输入彩照'}</span><small>默认样例可直接运行</small></div>
           <div className={`systemic-image-frame ${moduleId === 'cardiovascular-retina' ? 'cardio-image-frame' : ''}`}>
             <span className="corner tl"/><span className="corner tr"/><span className="corner bl"/><span className="corner br"/>
             {moduleId === 'cardiovascular-retina' && <span className="systemic-modality-label">CFP 彩照</span>}
@@ -228,7 +228,6 @@ function SystemicWorkspace({ apiUrl, moduleId }) {
         <aside className="systemic-metrics">
           <div className="systemic-panel-head"><span><Activity size={14}/>定量结果</span>{result && <small>{result.status_label}</small>}</div>
           {result ? <motion.div className="systemic-result-copy" initial={{opacity:0,y:6}} animate={{opacity:1,y:0}}>
-            {moduleId !== 'eye-age' && moduleId !== 'cerebrovascular-retina' && <div className={`systemic-quality ${result.quality.status}`}><span><Check size={13}/>{result.quality.label}</span><small>{result.quality.detail}</small></div>}
             <h3>{result.summary}</h3>
             <div className="systemic-metric-list">{result.metrics.map((metric) => <div key={metric.label}><span>{metric.label}<small>{metric.detail}</small></span><strong>{metric.value}<em>{metric.unit}</em></strong></div>)}</div>
             <div className="systemic-findings">{result.sections.map((section) => <div key={section.title}><b>{section.title}</b><p>{section.text}</p></div>)}</div>

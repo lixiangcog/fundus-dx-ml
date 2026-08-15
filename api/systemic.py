@@ -34,7 +34,7 @@ SYSTEMIC_MODULES: dict[str, dict[str, Any]] = {
         "subtitle": "联合彩照与 OCTA 评估冠心病相关视网膜风险",
         "sample_file": "HRF_04_g.jpg",
         "sample_octa_file": "octa_synthetic_232653.png",
-        "sample_note": "高分辨率眼底彩照研究样例",
+        "sample_note": "",
         "source_url": "https://github.com/Eyened/retinalysis-vascx",
         "weights_url": "https://huggingface.co/Eyened/vascx",
         "license": "Apache-2.0（代码）/ AGPL-3.0（权重）",

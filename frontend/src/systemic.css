@@ -72,7 +72,7 @@
 .systemic-cardiovascular-retina .systemic-grid{min-height:720px}
 .systemic-cardiovascular-retina .systemic-findings{grid-template-columns:1fr}
 .systemic-cardiovascular-retina .systemic-findings p{display:block}
-.systemic-cardiovascular-retina .cardio-image-frame{height:188px;min-height:160px}
+.systemic-cardiovascular-retina .cardio-image-frame{height:auto;min-height:245px;flex:1}
 .systemic-cardiovascular-retina .cardio-image-frame+.cardio-image-frame{margin-top:8px}
 .systemic-modality-label{position:absolute;left:10px;top:10px;z-index:4;padding:5px 8px;background:rgba(2,13,17,.85);border-left:2px solid var(--module);color:var(--module);font-size:9px;font-weight:600;letter-spacing:.5px}
 .systemic-cardiovascular-retina .systemic-actions button{padding:0 7px}
