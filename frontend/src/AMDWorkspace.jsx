@@ -400,7 +400,7 @@ function AMDWorkspace({ apiUrl }) {
           <li><Check size={12}/>复核两次眼底彩照变化</li>
           <li><Check size={12}/>识别 OCT 新生血管、玻璃膜疣与三类液体</li>
           <li><Check size={12}/>识别彩照玻璃膜疣、色素异常与黄斑萎缩</li>
-          <li><Check size={12}/>分割 OCTA 血管与彩照微小病灶</li>
+          <li><Check size={12}/>定位 OCTA CNV 候选区与彩照 AMD 病灶</li>
           <li><Check size={12}/>比较两次就诊的定量变化</li>
           <li><Check size={12}/>核验相关随访依据</li>
           <li><Check size={12}/>生成随访建议与操作规划</li>

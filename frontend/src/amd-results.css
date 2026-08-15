@@ -418,7 +418,9 @@
 .procedure-checklists li svg { flex: none; color: var(--cyan); margin-top: 1px; }
 
 @media (max-width: 1450px) {
-  .segmentation-gallery figure { height: 180px; }
+  .segmentation-visits { grid-template-columns: 1fr; }
+  .segmentation-gallery { grid-template-columns: repeat(3, 1fr); }
+  .segmentation-gallery figure { height: 220px; }
   .procedure-overview { grid-template-columns: 90px 1.25fr 1fr 1fr; }
   .procedure-overview article { padding: 9px; }
 }
