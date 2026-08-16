@@ -386,27 +386,32 @@ def _oct_infer(image: Image.Image) -> dict:
     with torch.inference_mode():
         labels = MODELS["oct_structure"](tensor).argmax(1)[0].cpu().numpy().astype(np.uint8)
     # The public layer model can hallucinate labels in the black scan margins.
-    # Estimate a smooth top/bottom tissue envelope column-wise and suppress
-    # anything outside it; this keeps the curved retinal contour while removing
-    # the upper/lower background layers from the displayed mask.
+    # Estimate a smooth curved top boundary plus an adaptive lower tissue limit.
+    # This keeps the retinal contour while removing upper/lower background layers.
+    row_profile = cv2.GaussianBlur(
+        scan.mean(axis=1).reshape(-1, 1), (1, 31), 0
+    ).ravel()
+    lower_threshold = max(0.12, float(np.percentile(row_profile, 60)) * 0.80)
+    band_rows = row_profile >= lower_threshold
+    band_rows[:50] = False
+    ids = np.flatnonzero(band_rows)
+    if ids.size:
+        lower_limit = int(ids[-1])
+    else:
+        lower_limit = int(scan.shape[0] * 0.72)
     tissue_profile = cv2.GaussianBlur(scan, (1, 21), 0)
-    tissue_rows = tissue_profile >= 0.12
+    tissue_threshold = max(0.10, float(np.percentile(row_profile, 45)) * 0.90)
+    tissue_rows = tissue_profile >= tissue_threshold
     tissue_rows[:50, :] = False  # ignore annotations/reflections at the scan edge
     row_ids = np.arange(scan.shape[0])[:, None]
     top = np.where(
         tissue_rows.any(axis=0), tissue_rows.argmax(axis=0), scan.shape[0] // 6
     ).astype(np.float32)
-    bottom = np.where(
-        tissue_rows[::-1].any(axis=0),
-        scan.shape[0] - 1 - tissue_rows[::-1].argmax(axis=0),
-        int(scan.shape[0] * 0.82),
-    ).astype(np.float32)
     top = cv2.GaussianBlur(top.reshape(1, -1), (0, 0), 8).ravel()
-    bottom = cv2.GaussianBlur(bottom.reshape(1, -1), (0, 0), 8).ravel()
     retinal_band = (
         (row_ids >= top[None, :])
-        & (row_ids <= bottom[None, :])
-        & (bottom[None, :] - top[None, :] > 80)
+        & (row_ids <= lower_limit)
+        & (lower_limit - top[None, :] > 80)
     )
     labels[~retinal_band] = 0
     base = cv2.cvtColor(np.uint8(scan * 255), cv2.COLOR_GRAY2RGB)
