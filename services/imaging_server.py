@@ -391,7 +391,7 @@ def _oct_infer(image: Image.Image) -> dict:
     row_profile = cv2.GaussianBlur(
         scan.mean(axis=1).reshape(-1, 1), (1, 31), 0
     ).ravel()
-    lower_threshold = max(0.12, float(np.percentile(row_profile, 60)) * 0.80)
+    lower_threshold = max(0.18, float(np.percentile(row_profile, 60)) * 0.95)
     band_rows = row_profile >= lower_threshold
     band_rows[:50] = False
     ids = np.flatnonzero(band_rows)
