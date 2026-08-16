@@ -7,6 +7,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RUNTIME = PROJECT_ROOT / "runtime/research_samples"
 
 SAMPLES = {
+    "quality-ultrawide-fundus": {
+        "pipeline_id": "quality-enhancement",
+        "path": RUNTIME / "quality_ultrawide_fundus.png",
+        "title": "超广角眼底彩照 · 质量增强默认样例",
+        "source": "用户提供的独立超广角彩照样例",
+        "license": "private research sample",
+        "reference_type": "no-reference fundus enhancement sample",
+        "split": "default display sample; no paired ground truth",
+    },
     "oct-enhancement-duke-s10-32": {
         "pipeline_id": "quality-enhancement",
         "path": RUNTIME / "duke_Subject_10_scan32_noise12.png",
@@ -96,7 +105,7 @@ def get_pipeline_reference(sample_id: str | None, pipeline_id: str) -> dict | No
     if not sample_id:
         return None
     sample = SAMPLES.get(sample_id)
-    if not sample or sample["pipeline_id"] != pipeline_id:
+    if not sample or sample["pipeline_id"] != pipeline_id or "reference_path" not in sample:
         return None
     return {**sample, "sample_id": sample_id}
 
