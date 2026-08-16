@@ -96,7 +96,7 @@ def test_quality_enhancement_uses_external_test_case_and_pretrained_engine():
     response = client.get("/capabilities")
     catalog = {item["id"]: item for item in response.json()["capabilities"]}
     enhancement = catalog["quality-enhancement"]
-    assert enhancement["sample_id"] == "oct-enhancement-duke-s10-32"
+    assert enhancement["sample_id"] == "amd-v0-fundus"
     assert enhancement["engine_type"] == "pretrained_model"
     assert enhancement["status"] == "validated"
 
@@ -111,7 +111,7 @@ def test_default_fundus_case_uses_disclosed_four_class_selection():
 def test_mismatched_sample_id_cannot_apply_reference_truth():
     response = client.post(
         "/analyze/quality-enhancement",
-        data={"sample_id": "oct-enhancement-duke-s10-32"},
+        data={"sample_id": "amd-v0-fundus"},
         files={"file": ("different.png", synthetic_image_bytes(), "image/png")},
     )
     assert response.status_code == 200
