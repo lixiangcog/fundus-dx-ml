@@ -23,13 +23,12 @@ OCT_ENHANCEMENT_BENCHMARK = PROJECT_ROOT / "benchmarks/oct_enhancement_v2.json"
 CAPABILITIES = [
     {"id":"quality-enhancement","number":"01","title":"质量增强","english":"QUALITY ENHANCEMENT","modalities":["OCT","OCTA","眼底彩照"],"default_modality":"OCT","engine":"OCT diffusion enhancement · v2","engine_type":"pretrained_model","method":"OCT 专用扩散去噪 + 模态自适应增强","license":"MIT","source_url":"https://github.com/DeweiHu/OCT_DDPM","sample_id":"oct-enhancement-duke-s10-32","sample_url":"/research-samples/oct-enhancement-duke-s10-32","output":"增强影像 + 配对 PSNR / SSIM / 边缘保持","status":"validated"},
     {"id":"structure-segmentation","number":"02","title":"OCT 结构分割","english":"OCT STRUCTURE SEGMENTATION","modalities":["OCT"],"default_modality":"OCT","engine":"Duke residual U-Net · v1","engine_type":"trained_model","method":"8 层结构 + 液体的十类像素级分割","license":"Research model / CC BY 4.0 data release","source_url":"https://github.com/ClinicalAI/MIRAGE","sample_id":"oct-structure-duke-s03-4","sample_url":"/research-samples/oct-structure-duke-s03-4","output":"层结构叠加 + Dice / IoU / 厚度代理","status":"validated"},
-    {"id":"disease-screening","number":"03","title":"眼底疾病筛查","english":"FUNDUS DISEASE SCREENING","modalities":["眼底彩照"],"default_modality":"眼底彩照","engine":"FundusDx ResNet18 · v2","engine_type":"trained_model","method":"AMD / 白内障 / 糖网 / 正常四分类 + CAM","license":"Project model","source_url":"https://github.com/lixiangcog/fundus-dx-ml","sample_id":"fundus-screen-idrid-67","sample_url":"/research-samples/fundus-screen-idrid-67","output":"筛查概率 + CAM（非病灶掩膜）","status":"validated"},
-    {"id":"vascular-quantification","number":"04","title":"OCTA 微血管定量","english":"OCTA VASCULAR QUANTIFICATION","modalities":["OCTA"],"default_modality":"OCTA","engine":"Pretrained DynUNet · epoch 30","engine_type":"pretrained_model","method":"深度血管分割 + 骨架、分支、密度量化","license":"MIT","source_url":"https://github.com/aiforvision/OCTA-autosegmentation","sample_id":"octa-vessels-sgan-232653","sample_url":"/research-samples/octa-vessels-sgan-232653","output":"血管掩膜 + Dice / IoU + 微血管形态学","status":"reference_validated"},
-    {"id":"fundus-lesion-quantification","number":"05","title":"彩照病灶定位量化","english":"FUNDUS LESION QUANTIFICATION","modalities":["眼底彩照"],"default_modality":"眼底彩照","engine":"U-Net · SE-ResNeXt50","engine_type":"pretrained_model","method":"棉絮斑 / 硬性渗出 / 出血 / 微动脉瘤像素分割","license":"MIT","source_url":"https://github.com/ClementP/fundus-lesions-segmentation","sample_id":"fundus-lesions-idrid-67","sample_url":"/research-samples/fundus-lesions-idrid-67","output":"四类病灶掩膜 + 面积 / 组件 / Dice / IoU","status":"validated"},
-    {"id":"oct-fluid-quantification","number":"06","title":"OCT 液体定位量化","english":"OCT FLUID QUANTIFICATION","modalities":["OCT"],"default_modality":"OCT","engine":"Duke residual U-Net · v1","engine_type":"trained_model","method":"视网膜液体像素定位、组件与面积比例量化","license":"Research model / CC BY 4.0 data release","source_url":"https://github.com/ClinicalAI/MIRAGE","sample_id":"oct-fluid-duke-s01-5","sample_url":"/research-samples/oct-fluid-duke-s01-5","output":"液体热区 + Dice / IoU / 面积 / 最大高度","status":"validated"},
-    {"id":"amd-oct-pathology","number":"07","title":"OCT AMD 病灶分类","english":"OCT AMD PATHOLOGY","modalities":["OCT"],"default_modality":"OCT","engine":"EfficientNet-B3 OCT classifier","engine_type":"pretrained_model","method":"脉络膜新生血管 / 水肿 / 玻璃膜疣 / 正常四分类 + 注意力定位","license":"Research model / Kermany dataset","source_url":"https://huggingface.co/tomalmog/oct-retinal-classifier","sample_id":"amd-v0-oct","sample_url":"/research-samples/amd-v0-oct","output":"四类病灶概率 + 注意力图","status":"unverified"},
+    {"id":"oct-fluid-quantification","number":"03","title":"OCT 液体定位量化","english":"OCT FLUID QUANTIFICATION","modalities":["OCT"],"default_modality":"OCT","engine":"Duke residual U-Net · v1","engine_type":"trained_model","method":"视网膜液体像素定位、组件与面积比例量化","license":"Research model / CC BY 4.0 data release","source_url":"https://github.com/ClinicalAI/MIRAGE","sample_id":"oct-fluid-duke-s01-5","sample_url":"/research-samples/oct-fluid-duke-s01-5","output":"液体热区 + Dice / IoU / 面积 / 最大高度","status":"validated"},
+    {"id":"amd-oct-pathology","number":"04","title":"OCT AMD 病灶分类","english":"OCT AMD PATHOLOGY","modalities":["OCT"],"default_modality":"OCT","engine":"EfficientNet-B3 OCT classifier","engine_type":"pretrained_model","method":"脉络膜新生血管 / 水肿 / 玻璃膜疣 / 正常四分类 + 注意力定位","license":"Research model / Kermany dataset","source_url":"https://huggingface.co/tomalmog/oct-retinal-classifier","sample_id":"amd-v0-oct","sample_url":"/research-samples/amd-v0-oct","output":"四类病灶概率 + 注意力图","status":"unverified"},
+    {"id":"vascular-quantification","number":"05","title":"OCTA 微血管定量","english":"OCTA VASCULAR QUANTIFICATION","modalities":["OCTA"],"default_modality":"OCTA","engine":"Pretrained DynUNet · epoch 30","engine_type":"pretrained_model","method":"深度血管分割 + 骨架、分支、密度量化","license":"MIT","source_url":"https://github.com/aiforvision/OCTA-autosegmentation","sample_id":"octa-vessels-sgan-232653","sample_url":"/research-samples/octa-vessels-sgan-232653","output":"血管掩膜 + Dice / IoU + 微血管形态学","status":"reference_validated"},
+    {"id":"disease-screening","number":"06","title":"眼底疾病筛查","english":"FUNDUS DISEASE SCREENING","modalities":["眼底彩照"],"default_modality":"眼底彩照","engine":"FundusDx ResNet18 · v2","engine_type":"trained_model","method":"AMD / 白内障 / 糖网 / 正常四分类 + CAM","license":"Project model","source_url":"https://github.com/lixiangcog/fundus-dx-ml","sample_id":"fundus-screen-idrid-67","sample_url":"/research-samples/fundus-screen-idrid-67","output":"筛查概率 + CAM（非病灶掩膜）","status":"validated"},
+    {"id":"fundus-lesion-quantification","number":"07","title":"彩照病灶定位量化","english":"FUNDUS LESION QUANTIFICATION","modalities":["眼底彩照"],"default_modality":"眼底彩照","engine":"U-Net · SE-ResNeXt50","engine_type":"pretrained_model","method":"棉絮斑 / 硬性渗出 / 出血 / 微动脉瘤像素分割","license":"MIT","source_url":"https://github.com/ClementP/fundus-lesions-segmentation","sample_id":"fundus-lesions-idrid-67","sample_url":"/research-samples/fundus-lesions-idrid-67","output":"四类病灶掩膜 + 面积 / 组件 / Dice / IoU","status":"validated"},
     {"id":"amd-fundus-risk-factors","number":"08","title":"彩照 AMD 风险因子","english":"FUNDUS AMD RISK FACTORS","modalities":["眼底彩照"],"default_modality":"眼底彩照","engine":"DeepSeeNet five-head ONNX","engine_type":"pretrained_model","method":"玻璃膜疣 / 色素异常 / 晚期 AMD / 地图样萎缩五项风险因子","license":"Research use / NCBI DeepSeeNet","source_url":"https://github.com/ncbi-nlp/DeepSeeNet","sample_id":"amd-v0-fundus","sample_url":"/research-samples/amd-v0-fundus","output":"五项风险概率 + 病灶候选定位","status":"unverified"},
-    {"id":"octa-amd-pathology","number":"09","title":"OCTA AMD 异常区域","english":"OCTA AMD PATHOLOGY","modalities":["OCTA"],"default_modality":"OCTA","engine":"OCTA vessel segmentation + CNV candidate extraction","engine_type":"pretrained_model","method":"血管分割基础上的中心异常血流候选区域分割与定量","license":"Research use / MIT upstream model","source_url":"https://github.com/aiforvision/OCTA-autosegmentation","sample_id":"octa-vessels-sgan-232653","sample_url":"/research-samples/octa-vessels-sgan-232653","output":"CNV 候选掩膜 + 概率图 + 面积 / 区域数","status":"unverified"},
 ]
 PIPELINE_INDEX = {item["id"]: item for item in CAPABILITIES}
 CLASS_LABELS = {"amd":"年龄相关性黄斑变性","cataract":"白内障","diabetic_retinopathy":"糖尿病视网膜病变","normal":"未见模型已知异常"}
@@ -257,42 +256,6 @@ def vascular_quantification(image: Image.Image, image_path=None, reference=None,
     }
 
 
-def octa_amd_pathology(image: Image.Image, image_path=None, reference=None, **_) -> dict:
-    """Expose the OCTA CNV candidate head as a dedicated AMD lesion workflow.
-
-    The upstream GPU model is the public OCTA vessel checkpoint.  The CNV candidate
-    is a morphology/flow-density head and is deliberately reported as a candidate
-    region rather than a pixel-level clinical ground truth segmentation.
-    """
-    vascular = vascular_quantification(image, image_path=image_path, reference=None)
-    candidate = vascular.get("candidate_regions", {}).get("cnv", {})
-    metrics = [
-        _metric("CNV 候选面积", candidate.get("area_pixels", 0), "px²"),
-        _metric("CNV 候选占比", candidate.get("ratio_percent", 0), "%"),
-        _metric("CNV 候选区域", candidate.get("components", 0), "个"),
-    ]
-    for item in vascular.get("metrics", []):
-        if item.get("label") in ("血管密度", "骨架总长度", "分支点"):
-            metrics.append(item)
-    return {
-        "summary": "OCTA AMD 异常血流候选区域分割完成",
-        "result_image": vascular.get("cnv_result_image", vascular["result_image"]),
-        "auxiliary_images": vascular.get("auxiliary_images", []),
-        "metrics": metrics,
-        "quality": _quality(
-            "unverified", "模型输出已完成数值校验",
-            "OCTA 血管公开权重 + 中心异常血流候选提取；当前病例无配对 CNV 掩膜真值",
-            {"upstream_model": "aiforvision/OCTA-autosegmentation",
-             "candidate_method": "central flow-density morphology head",
-             "cnv_net_reference": "mahsavali/CNV-Segmentation-Classification-OCTA"},
-            "仅作 CNV 候选区域提示，不替代人工阅片", None,
-        ),
-        "candidate_regions": {"cnv": candidate},
-        "runtime_ms": vascular["runtime_ms"],
-        "notice": "OCTA 异常区为血管分割与中心流密度联合得到的 CNV 候选区域，建议结合结构 OCT 复核。",
-    }
-
-
 def _fit_truth(mask: np.ndarray, transform: dict) -> np.ndarray:
     x,y,w,h=transform["x"],transform["y"],transform["width"],transform["height"]; crop=mask[y:y+h,x:x+w]; resized=cv2.resize(crop,(transform["fit_width"],transform["fit_height"]),interpolation=cv2.INTER_NEAREST); output=np.zeros((transform["size"],transform["size"]),dtype=np.uint8); top,left=transform["top"],transform["left"]; output[top:top+resized.shape[0],left:left+resized.shape[1]]=resized>0; return output
 
@@ -415,4 +378,4 @@ def fundus_amd_pathology(image: Image.Image, image_path=None, **_) -> dict:
 
 
 lesion_recognition = disease_screening
-PIPELINES = {"quality-enhancement":quality_enhancement,"structure-segmentation":structure_segmentation,"disease-screening":disease_screening,"vascular-quantification":vascular_quantification,"fundus-lesion-quantification":fundus_lesion_quantification,"oct-fluid-quantification":oct_fluid_quantification,"amd-oct-pathology":oct_amd_pathology,"amd-fundus-risk-factors":fundus_amd_pathology,"octa-amd-pathology":octa_amd_pathology}
+PIPELINES = {"quality-enhancement":quality_enhancement,"structure-segmentation":structure_segmentation,"disease-screening":disease_screening,"vascular-quantification":vascular_quantification,"fundus-lesion-quantification":fundus_lesion_quantification,"oct-fluid-quantification":oct_fluid_quantification,"amd-oct-pathology":oct_amd_pathology,"amd-fundus-risk-factors":fundus_amd_pathology}

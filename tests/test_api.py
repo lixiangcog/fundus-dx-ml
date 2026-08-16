@@ -72,16 +72,16 @@ def test_predict_rejects_non_image_content_type():
 
 
 
-def test_v5_catalog_exposes_nine_calibrated_pipelines():
+def test_v5_catalog_exposes_eight_calibrated_pipelines():
     response = client.get("/capabilities")
     assert response.status_code == 200
     body = response.json()
     assert body["version"] == "5.0.0"
-    assert len(body["capabilities"]) == 9
+    assert len(body["capabilities"]) == 8
     assert {item["id"] for item in body["capabilities"]} >= {
         "fundus-lesion-quantification", "oct-fluid-quantification",
         "vascular-quantification", "structure-segmentation",
-        "amd-oct-pathology", "amd-fundus-risk-factors", "octa-amd-pathology",
+        "amd-oct-pathology", "amd-fundus-risk-factors",
     }
     assert all(item.get("sample_id") for item in body["capabilities"])
 
