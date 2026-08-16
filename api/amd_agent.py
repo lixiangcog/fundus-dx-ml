@@ -410,7 +410,15 @@ def _evaluate_options(case: dict, tools: dict, vision: dict, specialist: dict, e
     reported = case.get("reference_biomarkers")
     reported_deltas = {}
     if reported:
-        for key, values in (("oct_lesion_area",reported["oct"]["candidate_lesion_area_mm2"]),("octa_cnv_area",reported["octa"]["cnv_candidate_area_mm2"]),("fundus_lesion_area",reported["fundus"]["candidate_lesion_area_mm2"])):
+        reported_series = [
+            ("oct_lesion_area", reported["oct"]["candidate_lesion_area_mm2"]),
+            ("octa_cnv_area", reported["octa"]["cnv_candidate_area_mm2"]),
+        ]
+        fundus = reported.get("fundus", {})
+        fundus_values = fundus.get("candidate_lesion_area_mm2") or fundus.get("candidate_lesion_ratio_percent")
+        if fundus_values:
+            reported_series.append(("fundus_lesion_area", fundus_values))
+        for key, values in reported_series:
             reported_deltas[key+"_percent"] = round((values[1]-values[0])/max(values[0],1e-6)*100,2)
     vision_text = json.dumps({"generalist": vision, "fundus_specialist": specialist}, ensure_ascii=False)
     active_visual = _contains_any(vision_text, ["new fluid", "increased fluid", "新发液体", "液体增加", "new hemorrhage", "新出血", "worsening"])
