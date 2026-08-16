@@ -66,13 +66,13 @@ DEFAULT_CASE = {
     ],
     "context": "病例记录：60 岁女性右眼 nAMD，接受 5 次抗 VEGF 注射；2024-03 至 2024-06 视力与多模态影像标志物总体改善。",
     "reference_biomarkers": {
-        "provenance":"paper_reported_not_locally_recomputed",
+        "provenance":"paper_reported_for_oct_octa_locally_recomputed_for_fundus",
         "oct":{"candidate_lesion_area_mm2":[2.38,1.28],"maximum_lesion_height_um":[413.4,354.9]},
-        "fundus":{"candidate_lesion_area_mm2":[8.58,6.58],"followup_relative_to_baseline_percent":76.7},
+        "fundus":{"candidate_lesion_area_px":[5068,4506],"candidate_lesion_ratio_percent":[1.9333,1.7189],"hemorrhage_area_px":[578,17],"followup_relative_to_baseline_percent":88.9},
         "octa":{"cnv_candidate_area_mm2":[1.39,0.08],"followup_relative_to_baseline_percent":5.7},
         "bcva_decimal":[0.3,0.5]
     },
-    "image_quality": {"source":"paper_figure_crop","native_pixels":[93,99],"display_pixels":[564,594],"status":"review","reason":"当前示例影像分辨率有限，仅用于系统功能演示；不等同于原始 DICOM/OCT 体数据。"}
+    "image_quality": {"source":"user_provided_followup_pair","native_pixels":[512,512],"display_pixels":[512,512],"status":"passed","reason":"眼底彩照前后顺序经 AMD 病灶模型量化校准：V0 候选病灶与出血面积高于 V1。"}
 }
 
 EVIDENCE_SUMMARIES_ZH = {
@@ -486,8 +486,16 @@ def _decision_evidence_details(
         case_points.extend([
             f"OCT 候选病灶面积由 {reported['oct']['candidate_lesion_area_mm2'][0]:g} 降至 {reported['oct']['candidate_lesion_area_mm2'][1]:g} mm²",
             f"OCTA CNV 候选面积由 {reported['octa']['cnv_candidate_area_mm2'][0]:g} 降至 {reported['octa']['cnv_candidate_area_mm2'][1]:g} mm²",
-            f"眼底彩照候选病灶面积由 {reported['fundus']['candidate_lesion_area_mm2'][0]:g} 降至 {reported['fundus']['candidate_lesion_area_mm2'][1]:g} mm²",
         ])
+        fundus = reported.get("fundus", {})
+        if fundus.get("candidate_lesion_area_mm2"):
+            case_points.append(
+                f"眼底彩照候选病灶面积由 {fundus['candidate_lesion_area_mm2'][0]:g} 降至 {fundus['candidate_lesion_area_mm2'][1]:g} mm²"
+            )
+        elif fundus.get("candidate_lesion_ratio_percent"):
+            case_points.append(
+                f"眼底彩照候选病灶占比由 {fundus['candidate_lesion_ratio_percent'][0]:g}% 降至 {fundus['candidate_lesion_ratio_percent'][1]:g}%"
+            )
     else:
         deltas = tools.get("deltas", {})
 

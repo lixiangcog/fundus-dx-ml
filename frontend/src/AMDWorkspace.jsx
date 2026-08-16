@@ -108,7 +108,11 @@ function buildDecisionEvidence(result) {
   if (reported) {
     points.push(`OCT 候选病灶面积由 ${reported.oct.candidate_lesion_area_mm2[0]} 降至 ${reported.oct.candidate_lesion_area_mm2[1]} mm²`);
     points.push(`OCTA CNV 候选面积由 ${reported.octa.cnv_candidate_area_mm2[0]} 降至 ${reported.octa.cnv_candidate_area_mm2[1]} mm²`);
-    points.push(`眼底彩照候选病灶面积由 ${reported.fundus.candidate_lesion_area_mm2[0]} 降至 ${reported.fundus.candidate_lesion_area_mm2[1]} mm²`);
+    if (reported.fundus?.candidate_lesion_area_mm2) {
+      points.push(`眼底彩照候选病灶面积由 ${reported.fundus.candidate_lesion_area_mm2[0]} 降至 ${reported.fundus.candidate_lesion_area_mm2[1]} mm²`);
+    } else if (reported.fundus?.candidate_lesion_ratio_percent) {
+      points.push(`眼底彩照候选病灶占比由 ${reported.fundus.candidate_lesion_ratio_percent[0]}% 降至 ${reported.fundus.candidate_lesion_ratio_percent[1]}%`);
+    }
   } else {
     const deltas = result.tool_results?.deltas || {};
     [['OCT 液体面积','oct_fluid_area_percent','%'],['OCTA 血管密度','octa_vessel_density_points',' 个百分点'],['眼底彩照病灶占比','fundus_lesion_ratio_points',' 个百分点']].forEach(([label,key,unit]) => {
@@ -546,7 +550,9 @@ function AgentResult({ result, onReset }) {
             <article><small>OCT 病灶面积</small><strong>{result.reported_reference_biomarkers.oct.candidate_lesion_area_mm2[0]} → {result.reported_reference_biomarkers.oct.candidate_lesion_area_mm2[1]} mm²</strong></article>
             <article><small>OCT 最大高度</small><strong>{result.reported_reference_biomarkers.oct.maximum_lesion_height_um[0]} → {result.reported_reference_biomarkers.oct.maximum_lesion_height_um[1]} μm</strong></article>
             <article><small>OCTA CNV 面积</small><strong>{result.reported_reference_biomarkers.octa.cnv_candidate_area_mm2[0]} → {result.reported_reference_biomarkers.octa.cnv_candidate_area_mm2[1]} mm²</strong></article>
-            <article><small>眼底病灶面积</small><strong>{result.reported_reference_biomarkers.fundus.candidate_lesion_area_mm2[0]} → {result.reported_reference_biomarkers.fundus.candidate_lesion_area_mm2[1]} mm²</strong></article>
+            {result.reported_reference_biomarkers.fundus?.candidate_lesion_area_mm2
+              ? <article><small>眼底病灶面积</small><strong>{result.reported_reference_biomarkers.fundus.candidate_lesion_area_mm2[0]} → {result.reported_reference_biomarkers.fundus.candidate_lesion_area_mm2[1]} mm²</strong></article>
+              : <article><small>眼底候选病灶占比</small><strong>{result.reported_reference_biomarkers.fundus?.candidate_lesion_ratio_percent?.[0]}% → {result.reported_reference_biomarkers.fundus?.candidate_lesion_ratio_percent?.[1]}%</strong></article>}
           </div>
         </section>}
 
