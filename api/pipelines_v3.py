@@ -118,9 +118,16 @@ def _enhance_non_oct(rgb: np.ndarray) -> tuple[np.ndarray,np.ndarray,str]:
         smooth=cv2.GaussianBlur(enhanced_gray,(0,0),1.0)
         enhanced_gray=cv2.addWeighted(enhanced_gray,1.12,smooth,-.12,0)
         return cv2.cvtColor(enhanced_gray,cv2.COLOR_GRAY2RGB),enhanced_gray,"OCTA"
+    # Fundus images need edge preservation: strong denoising makes capillaries and
+    # small lesions look soft.  Blend a restrained CLAHE luminance with the
+    # original, then apply a low-gain unsharp mask while keeping chroma intact.
     lab=cv2.cvtColor(rgb,cv2.COLOR_RGB2LAB)
-    luminance=cv2.fastNlMeansDenoising(lab[:,:,0],None,h=5,templateWindowSize=7,searchWindowSize=21)
-    lab[:,:,0]=cv2.createCLAHE(clipLimit=1.35,tileGridSize=(8,8)).apply(luminance)
+    original_l=lab[:,:,0].astype(np.float32)
+    local_l=cv2.createCLAHE(clipLimit=1.6,tileGridSize=(8,8)).apply(lab[:,:,0]).astype(np.float32)
+    blended=cv2.addWeighted(original_l,0.55,local_l,0.45,0.0)
+    blurred=cv2.GaussianBlur(blended,(0,0),1.1)
+    sharpened=cv2.addWeighted(blended,1.35,blurred,-0.35,0.0)
+    lab[:,:,0]=np.uint8(np.clip(sharpened,0,255))
     enhanced=cv2.cvtColor(lab,cv2.COLOR_LAB2RGB)
     return enhanced,cv2.cvtColor(enhanced,cv2.COLOR_RGB2GRAY),"眼底彩照"
 
@@ -134,6 +141,8 @@ def quality_enhancement(image: Image.Image, image_path=None, reference=None, **_
     else:
         enhanced,enhanced_gray,mode=_enhance_non_oct(rgb)
     metrics=[_metric("输出分辨率",f"{enhanced.shape[1]}×{enhanced.shape[0]}","px")]
+    input_sharpness=float(cv2.Laplacian(gray,cv2.CV_32F).var())
+    output_sharpness=float(cv2.Laplacian(enhanced_gray,cv2.CV_32F).var())
     if reference and Path(reference["reference_path"]).is_file():
         truth=cv2.resize(np.asarray(Image.open(reference["reference_path"]).convert("L")),(gray.shape[1],gray.shape[0]))
         bp,ap=_psnr(truth,gray),_psnr(truth,enhanced_gray); bs,ass=_ssim(truth,gray),_ssim(truth,enhanced_gray)
@@ -153,7 +162,11 @@ def quality_enhancement(image: Image.Image, image_path=None, reference=None, **_
         }
         quality=_quality("passed" if passed else "failed","外部配对测试通过" if passed else "配对质量门槛未通过","Duke DME 外部测试 2 位受试者 / 22 张 B-scan；固定合成噪声",evidence,"PSNR 增益 ≥ 3 dB、SSIM 增益 ≥ 0.10 且边缘一致性不下降",reference)
     else:
-        quality=_quality("unverified","无真值上传",f"{mode} 无参考质量代理",{"laplacian_variance":float(cv2.Laplacian(enhanced_gray,cv2.CV_32F).var())},"不作准确度结论",None)
+        metrics.extend([
+            _metric("边缘清晰度代理",round(output_sharpness,1),"",f"输入 {input_sharpness:.1f}"),
+            _metric("清晰度变化",round(output_sharpness/max(input_sharpness,1e-6),2),"倍"),
+        ])
+        quality=_quality("unverified","无真值上传",f"{mode} 无参考质量代理",{"laplacian_variance_before":round(input_sharpness,3),"laplacian_variance_after":round(output_sharpness,3),"sharpness_ratio":round(output_sharpness/max(input_sharpness,1e-6),3)},"不作准确度结论",None)
     return {"summary":"影像质量增强完成","result_image":_png_data_url(enhanced),"auxiliary_images":[{"label":"增强前","image":_png_data_url(rgb)}],"metrics":metrics,"quality":quality,"enhancement_mode":mode,"runtime_ms":round((time.perf_counter()-started)*1000,1),"notice":"默认病例已做 22 张外部配对测试；上传影像无真值时仅提供增强结果，不作临床质量结论。"}
 
 
