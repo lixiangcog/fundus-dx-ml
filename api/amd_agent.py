@@ -751,7 +751,11 @@ def run_case(case: dict, images: dict[str, Path], model, transform, class_names)
         "label": "示例影像分辨率有限，需人工复核" if quality_status == "review" else "输入质量门槛通过",
         "checks": {"six_distinct_images":distinct,"modalities_complete":len(saved_paths)==6,"decoded_dimensions":dimensions,"source_native_pixels":native},
         "reason": image_meta.get("reason", ""),
-        "decision_measurements": "paper_reported_reference" if case.get("reference_biomarkers") else "locally_computed_tools",
+        "decision_measurements": (
+            "paper_reported_reference_plus_local_fundus_model"
+            if case.get("reference_biomarkers", {}).get("provenance", "").endswith("locally_recomputed_for_fundus")
+            else "paper_reported_reference" if case.get("reference_biomarkers") else "locally_computed_tools"
+        ),
     }
 
     trace = []
