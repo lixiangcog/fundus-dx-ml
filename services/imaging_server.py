@@ -385,20 +385,30 @@ def _oct_infer(image: Image.Image) -> dict:
     tensor = torch.from_numpy(normalized)[None, None].cuda()
     with torch.inference_mode():
         labels = MODELS["oct_structure"](tensor).argmax(1)[0].cpu().numpy().astype(np.uint8)
-    row_profile = cv2.GaussianBlur(
-        scan.mean(axis=1).reshape(-1, 1), (1, 31), 0
-    ).ravel()
-    band_threshold = max(0.09, float(np.percentile(row_profile, 45)) * 0.55)
-    band_rows = cv2.morphologyEx(
-        np.uint8(row_profile >= band_threshold).reshape(-1, 1),
-        cv2.MORPH_CLOSE,
-        np.ones((31, 1), np.uint8),
-    ).ravel() > 0
-    if np.any(band_rows):
-        first, last = np.flatnonzero(band_rows)[[0, -1]]
-        retinal_band = np.zeros_like(labels, dtype=bool)
-        retinal_band[first:last + 1] = True
-        labels[~retinal_band] = 0
+    # The public layer model can hallucinate labels in the black scan margins.
+    # Estimate a smooth top/bottom tissue envelope column-wise and suppress
+    # anything outside it; this keeps the curved retinal contour while removing
+    # the upper/lower background layers from the displayed mask.
+    tissue_profile = cv2.GaussianBlur(scan, (1, 21), 0)
+    tissue_rows = tissue_profile >= 0.12
+    tissue_rows[:50, :] = False  # ignore annotations/reflections at the scan edge
+    row_ids = np.arange(scan.shape[0])[:, None]
+    top = np.where(
+        tissue_rows.any(axis=0), tissue_rows.argmax(axis=0), scan.shape[0] // 6
+    ).astype(np.float32)
+    bottom = np.where(
+        tissue_rows[::-1].any(axis=0),
+        scan.shape[0] - 1 - tissue_rows[::-1].argmax(axis=0),
+        int(scan.shape[0] * 0.82),
+    ).astype(np.float32)
+    top = cv2.GaussianBlur(top.reshape(1, -1), (0, 0), 8).ravel()
+    bottom = cv2.GaussianBlur(bottom.reshape(1, -1), (0, 0), 8).ravel()
+    retinal_band = (
+        (row_ids >= top[None, :])
+        & (row_ids <= bottom[None, :])
+        & (bottom[None, :] - top[None, :] > 80)
+    )
+    labels[~retinal_band] = 0
     base = cv2.cvtColor(np.uint8(scan * 255), cv2.COLOR_GRAY2RGB)
     overlay = cv2.addWeighted(base, 0.58, OCT_COLORS[labels], 0.42, 0)
     boundary = np.zeros_like(labels, dtype=bool)
