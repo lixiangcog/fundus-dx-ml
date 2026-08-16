@@ -56,7 +56,7 @@ DEFAULT_CASE = {
     "title": "内置示例：纵向 nAMD 随访病例",
     "research_demo": True,
     "evidence_origin": "reported_reference",
-    "patient": {"age": 78, "sex": "女", "eye": "右眼", "diagnosis": "新生血管性 AMD（既往诊断）"},
+    "patient": {"age": 60, "sex": "女", "eye": "右眼", "diagnosis": "新生血管性 AMD（既往诊断）"},
     "treatment": {"agent": "玻璃体腔抗 VEGF（具体药物未记录）", "injections": 5, "current_interval_weeks": "未记录"},
     "visits": [
         {"id":"V0","label":"基线","date":"2024-03","bcva_decimal":0.3,
@@ -64,7 +64,7 @@ DEFAULT_CASE = {
         {"id":"V1","label":"随访","date":"2024-06","bcva_decimal":0.5,
          "images":{"oct":"/research-samples/amd-v1-oct","octa":"/research-samples/amd-v1-octa","fundus":"/research-samples/amd-v1-fundus"}},
     ],
-    "context": "病例记录：78 岁女性右眼 nAMD，接受 5 次抗 VEGF 注射；2024-03 至 2024-06 视力与多模态影像标志物总体改善。",
+    "context": "病例记录：60 岁女性右眼 nAMD，接受 5 次抗 VEGF 注射；2024-03 至 2024-06 视力与多模态影像标志物总体改善。",
     "reference_biomarkers": {
         "provenance":"paper_reported_not_locally_recomputed",
         "oct":{"candidate_lesion_area_mm2":[2.38,1.28],"maximum_lesion_height_um":[413.4,354.9]},
