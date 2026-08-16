@@ -414,6 +414,8 @@ def _oct_infer(image: Image.Image) -> dict:
         & (lower_limit - top[None, :] > 80)
     )
     labels[~retinal_band] = 0
+    # Hide the lowest green BM boundary layer from the structure display.
+    labels[labels == 8] = 0
     base = cv2.cvtColor(np.uint8(scan * 255), cv2.COLOR_GRAY2RGB)
     overlay = cv2.addWeighted(base, 0.58, OCT_COLORS[labels], 0.42, 0)
     boundary = np.zeros_like(labels, dtype=bool)
