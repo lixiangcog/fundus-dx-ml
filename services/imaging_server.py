@@ -302,7 +302,7 @@ def _octa_cnv_candidate(
     height, width = vessel_mask.shape
     yy, xx = np.ogrid[:height, :width]
     radius = np.sqrt((xx - width / 2) ** 2 + (yy - height / 2) ** 2)
-    central = radius < min(height, width) * 0.44
+    central = radius < min(height, width) * 0.38
     radial_prior = np.exp(-((radius / (min(height, width) * 0.48)) ** 2))
 
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(
@@ -327,7 +327,7 @@ def _octa_cnv_candidate(
     clean = np.zeros_like(candidate)
     for label_id in range(1, count):
         distance = np.linalg.norm(centroids[label_id] - np.array([width / 2, height / 2]))
-        if stats[label_id, cv2.CC_STAT_AREA] >= 700 and distance < min(height, width) * 0.41:
+        if stats[label_id, cv2.CC_STAT_AREA] >= 700 and distance < min(height, width) * 0.35:
             clean[components == label_id] = 1
     return clean, np.clip(score, 0, 1)
 
@@ -385,6 +385,20 @@ def _oct_infer(image: Image.Image) -> dict:
     tensor = torch.from_numpy(normalized)[None, None].cuda()
     with torch.inference_mode():
         labels = MODELS["oct_structure"](tensor).argmax(1)[0].cpu().numpy().astype(np.uint8)
+    row_profile = cv2.GaussianBlur(
+        scan.mean(axis=1).reshape(-1, 1), (1, 31), 0
+    ).ravel()
+    band_threshold = max(0.09, float(np.percentile(row_profile, 45)) * 0.55)
+    band_rows = cv2.morphologyEx(
+        np.uint8(row_profile >= band_threshold).reshape(-1, 1),
+        cv2.MORPH_CLOSE,
+        np.ones((31, 1), np.uint8),
+    ).ravel() > 0
+    if np.any(band_rows):
+        first, last = np.flatnonzero(band_rows)[[0, -1]]
+        retinal_band = np.zeros_like(labels, dtype=bool)
+        retinal_band[first:last + 1] = True
+        labels[~retinal_band] = 0
     base = cv2.cvtColor(np.uint8(scan * 255), cv2.COLOR_GRAY2RGB)
     overlay = cv2.addWeighted(base, 0.58, OCT_COLORS[labels], 0.42, 0)
     boundary = np.zeros_like(labels, dtype=bool)
@@ -459,7 +473,7 @@ def _oct_fluid_subtypes_infer(image: Image.Image) -> dict:
         flipped = _oct_fluid_probability(session, tensor[:, :, :, ::-1].copy())[:, :, :, ::-1]
         model_probabilities[name] = (direct + flipped) / 2.0
 
-    probability = 0.80 * model_probabilities["slot1"] + 0.20 * model_probabilities["slot2"]
+    probability = 0.92 * model_probabilities["slot1"] + 0.08 * model_probabilities["slot2"]
     labels = probability.argmax(axis=1)[0].astype(np.uint8)
     for class_id, minimum_area in ((1, 12), (2, 24), (3, 24)):
         class_mask = np.uint8(labels == class_id)
@@ -516,12 +530,12 @@ def _oct_fluid_subtypes_infer(image: Image.Image) -> dict:
 
 def _fundus_occlusion_attention(
     cropped: Image.Image, session: ort.InferenceSession, finding_id: str,
-    baseline_probability: float, grid: int = 7,
+    baseline_probability: float, grid: int = 9,
 ) -> np.ndarray:
     size = int(session.get_inputs()[0].shape[1])
     array = np.asarray(cropped.resize((size, size), Image.Resampling.BICUBIC), dtype=np.float32)
     tensor = array / 127.5 - 1.0
-    patch_size = max(12, int(size * 0.26))
+    patch_size = max(12, int(size * 0.20))
     centers_y = np.linspace(size * 0.10, size * 0.90, grid).astype(int)
     centers_x = np.linspace(size * 0.10, size * 0.90, grid).astype(int)
     batch = np.repeat(tensor[None], grid * grid, axis=0)
@@ -536,7 +550,7 @@ def _fundus_occlusion_attention(
     occluded = output[:, 1:].sum(axis=1) if finding_id == "drusen" else output[:, 1]
     drops = np.maximum(baseline_probability - occluded, 0).reshape(grid, grid)
     heatmap = cv2.resize(drops, (512, 512), interpolation=cv2.INTER_CUBIC)
-    heatmap = np.maximum(cv2.GaussianBlur(heatmap, (0, 0), 18), 0)
+    heatmap = np.maximum(cv2.GaussianBlur(heatmap, (0, 0), 12), 0)
     return heatmap / max(float(heatmap.max()), 1e-8)
 
 
@@ -598,7 +612,7 @@ def _fundus_amd_pathology_infer(image: Image.Image) -> dict:
     candidate_score = feature * (0.28 + 0.72 * attention)
     threshold = float(np.percentile(candidate_score[macular_region], 96.8))
     candidate = np.uint8(
-        (candidate_score >= threshold) & macular_region & (attention > 0.18)
+        (candidate_score >= threshold) & macular_region & (attention > 0.35)
     )
     candidate = cv2.morphologyEx(
         candidate, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
