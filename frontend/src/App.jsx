@@ -15,7 +15,7 @@ import './theme-refresh.css';
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000' : window.location.origin);
 const MAX_FILE_SIZE = 12 * 1024 * 1024;
-const ICONS = { 'quality-enhancement': Sparkles, 'structure-segmentation': Layers3, 'disease-screening': ScanLine, 'vascular-quantification': Network, 'fundus-lesion-quantification': CircleDot, 'oct-fluid-quantification': Activity };
+const ICONS = { 'quality-enhancement': Sparkles, 'structure-segmentation': Layers3, 'disease-screening': ScanLine, 'vascular-quantification': Network, 'fundus-lesion-quantification': CircleDot, 'oct-fluid-quantification': Activity, 'amd-oct-pathology': Microscope, 'amd-fundus-risk-factors': BrainCircuit };
 const DESCRIPTIONS = {
   'quality-enhancement':'改善噪声与清晰度',
   'structure-segmentation':'标记视网膜层结构与液体区域',
@@ -23,6 +23,8 @@ const DESCRIPTIONS = {
   'vascular-quantification':'提取血管并计算密度、长度与分支',
   'fundus-lesion-quantification':'定位并量化四类常见眼底病灶',
   'oct-fluid-quantification':'定位液体区域并计算面积与高度',
+  'amd-oct-pathology':'识别四类 AMD 相关病灶并生成注意力图',
+  'amd-fundus-risk-factors':'评估玻璃膜疣、色素与萎缩风险因子',
 };
 const CLASS_NAMES = { amd:'年龄相关性黄斑变性', cataract:'白内障', diabetic_retinopathy:'糖尿病视网膜病变', normal:'未见已知异常' };
 const SYSTEMIC_WORKSPACES = {
@@ -37,6 +39,8 @@ const FALLBACK = [
   { id:'vascular-quantification',number:'04',title:'OCTA 微血管定量',english:'OCTA VASCULAR QUANTIFICATION',default_modality:'OCTA',modalities:['OCTA'],engine:'Pretrained DynUNet · epoch 30',engine_type:'pretrained_model',method:'深度血管分割 + 骨架、分支、密度量化',sample_id:'octa-vessels-sgan-232653',sample_url:'/research-samples/octa-vessels-sgan-232653',source_url:'https://github.com/aiforvision/OCTA-autosegmentation',license:'MIT',output:'血管掩膜 + Dice / IoU + 微血管形态学' },
   { id:'fundus-lesion-quantification',number:'05',title:'彩照病灶定位量化',english:'FUNDUS LESION QUANTIFICATION',default_modality:'眼底彩照',modalities:['眼底彩照'],engine:'U-Net · SE-ResNeXt50',engine_type:'pretrained_model',method:'棉絮斑 / 硬性渗出 / 出血 / 微动脉瘤像素分割',sample_id:'fundus-lesions-idrid-67',sample_url:'/research-samples/fundus-lesions-idrid-67',source_url:'https://github.com/ClementP/fundus-lesions-segmentation',license:'MIT',output:'四类病灶掩膜 + 面积 / 组件 / Dice / IoU' },
   { id:'oct-fluid-quantification',number:'06',title:'OCT 液体定位量化',english:'OCT FLUID QUANTIFICATION',default_modality:'OCT',modalities:['OCT'],engine:'Duke residual U-Net · v1',engine_type:'trained_model',method:'视网膜液体像素定位、组件与面积比例量化',sample_id:'oct-fluid-duke-s01-5',sample_url:'/research-samples/oct-fluid-duke-s01-5',source_url:'https://github.com/ClinicalAI/MIRAGE',license:'Research model / CC BY 4.0 data release',output:'液体热区 + Dice / IoU / 面积 / 最大高度' },
+  { id:'amd-oct-pathology',number:'07',title:'OCT AMD 病灶分类',english:'OCT AMD PATHOLOGY',default_modality:'OCT',modalities:['OCT'],engine:'EfficientNet-B3 OCT classifier',engine_type:'pretrained_model',method:'脉络膜新生血管 / 水肿 / 玻璃膜疣 / 正常四分类 + 注意力定位',sample_id:'amd-v0-oct',sample_url:'/research-samples/amd-v0-oct',source_url:'https://huggingface.co/tomalmog/oct-retinal-classifier',license:'Research model / Kermany dataset',output:'四类病灶概率 + 注意力图' },
+  { id:'amd-fundus-risk-factors',number:'08',title:'彩照 AMD 风险因子',english:'FUNDUS AMD RISK FACTORS',default_modality:'眼底彩照',modalities:['眼底彩照'],engine:'DeepSeeNet five-head ONNX',engine_type:'pretrained_model',method:'玻璃膜疣 / 色素异常 / 晚期 AMD / 地图样萎缩五项风险因子',sample_id:'amd-v0-fundus',sample_url:'/research-samples/amd-v0-fundus',source_url:'https://github.com/ncbi-nlp/DeepSeeNet',license:'Research use / NCBI DeepSeeNet',output:'五项风险概率 + 病灶候选定位' },
 ];
 
 function fileName(id) { return `demo_${id.replaceAll('-','_')}.png`; }
