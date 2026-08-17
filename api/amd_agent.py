@@ -68,11 +68,11 @@ DEFAULT_CASE = {
     "reference_biomarkers": {
         "provenance":"paper_reported_for_oct_octa_locally_recomputed_for_fundus",
         "oct":{"candidate_lesion_area_mm2":[2.38,1.28],"maximum_lesion_height_um":[413.4,354.9]},
-        "fundus":{"candidate_lesion_area_px":[5068,4506],"candidate_lesion_ratio_percent":[1.9333,1.7189],"hemorrhage_area_px":[578,17],"followup_relative_to_baseline_percent":88.9},
+        "fundus":{"candidate_lesion_area_px":[4636,2905],"candidate_lesion_ratio_percent":[1.7685,1.1082],"hard_exudate_area_px":[1860,698],"hemorrhage_area_px":[3988,0],"followup_relative_to_baseline_percent":62.66},
         "octa":{"cnv_candidate_area_mm2":[1.39,0.08],"followup_relative_to_baseline_percent":5.7},
         "bcva_decimal":[0.3,0.5]
     },
-    "image_quality": {"source":"user_provided_followup_pair","native_pixels":[512,512],"display_pixels":[512,512],"status":"passed","reason":"眼底彩照前后顺序经 AMD 病灶模型量化校准：V0 候选病灶与出血面积高于 V1。"}
+    "image_quality": {"source":"user_provided_followup_pair","native_pixels":[833,682],"display_pixels":[833,682],"status":"passed","reason":"眼底彩照前后顺序经 AMD 病灶模型量化校准：V0 候选病灶、硬性渗出与出血面积高于 V1。"}
 }
 
 EVIDENCE_SUMMARIES_ZH = {
