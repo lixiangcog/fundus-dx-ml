@@ -151,7 +151,7 @@ function App() {
     <div className="app-shell">
       <div className="ambient-grid" aria-hidden="true"><i /><i /><i /><span /></div>
       <header className="topbar">
-        <div className="brand"><span className="brand-mark"><Microscope size={20} /></span><div><strong>视界<strong className="accent">智析</strong></strong><small>多模态眼科影像分析平台</small></div></div>
+        <div className="brand"><img className="brand-logo" src="/m2lab-header.png" alt="M²Lab 多模态医疗智能实验室" /></div>
         <nav className="workspace-switch">
           <button className={workspace === 'imaging' ? 'active' : ''} onClick={() => setWorkspace('imaging')}>影像分析</button>
           <button className={workspace === 'amd' ? 'active' : ''} onClick={() => setWorkspace('amd')}>AMD 随访</button>

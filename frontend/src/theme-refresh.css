@@ -225,3 +225,6 @@ main{padding-top:32px}
 .stroke-profile-primary label{border-color:#e3def0;border-radius:8px;background:#fff;color:#5f6072}
 .stroke-profile-primary label span{font-size:10px}.stroke-profile-primary input,.stroke-profile-primary select{color:#292a38;font-size:13px}.stroke-profile-primary em{font-size:9px}
 .stroke-profile-flags button{border-color:#ded8ed;border-radius:8px;background:#fff;color:#666779;font-size:11px}.stroke-profile-flags button span{border-color:#cbbcf0;border-radius:4px}.stroke-profile-flags button.active{border-color:#8f61f7;background:#eee8ff;color:#6125e4}
+
+/* M²Lab 品牌标志：使用裁切后的原始标志，保留图形与字形比例。 */
+.brand-logo{display:block;width:112px;height:80px;object-fit:contain;object-position:center;border-radius:0}
